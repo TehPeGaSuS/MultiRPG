@@ -49,6 +49,7 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     rl_window = int(web_cfg.get("rate_window", 60))
     rl = RateLimiter(limit=rl_limit, window=rl_window)
 
+    @web.middleware
     async def _middleware(req, handler):
         ip = get_ip(req)
         if not rl.is_allowed(ip):
