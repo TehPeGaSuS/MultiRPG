@@ -1,0 +1,3 @@
+# Python 3.11+ required (uses stdlib tomllib)
+aiosqlite>=0.19.0
+aiohttp>=3.9.0
