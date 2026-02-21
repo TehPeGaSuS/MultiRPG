@@ -1,4 +1,7 @@
-[![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml) [![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml)
+[![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml) :: [![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml) :: [![CodeQL Advanced](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml)
+
+---
+
 # ⚔ Multi IdleRPG — Multi-Network IdleRPG Python Bot ⚔
 
 A faithful Python reimplementation of [IdleRPG](http://idlerpg.net/) v3.0, extended to run simultaneously across multiple IRC networks with a shared game world and a live web interface.
