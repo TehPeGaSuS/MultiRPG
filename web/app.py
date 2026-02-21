@@ -111,6 +111,9 @@ th{font-family:'Cinzel',serif;color:var(--gold);padding:0.85rem 1rem;text-align:
    font-size:0.8rem;letter-spacing:0.12em;border-bottom:1px solid var(--border)}
 td{padding:0.75rem 1rem;border-bottom:1px solid #231b09;font-size:0.95rem}
 tr:hover td{background:rgba(201,168,76,0.05)}
+td a{color:var(--text);text-decoration:none;border-bottom:1px solid var(--border);transition:color 0.2s,border-color 0.2s}
+td a:hover{color:var(--gold);border-bottom-color:var(--gold)}
+td a:visited{color:var(--muted)}
 tr:last-child td{border-bottom:none}
 """
     body = f"""<div class="container"><div class="table-wrap"><table>
