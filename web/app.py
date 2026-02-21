@@ -973,7 +973,7 @@ async def handle_play(req):
   {cards}
   <p class="hint">Click a channel name to open it in your IRC client.<br>
   All commands are sent via <strong>private message</strong> to the bot.<br>
-  Type <code>/msg {networks[0].get("nick","MultiRPG") if networks else "MultiRPG"} HELP</code> to get started.</p>
+  Example: Type <code>/msg {networks[0].get("nick","MultiRPG") if networks else "MultiRPG"} HELP</code> to get started.</p>
 </div>"""
 
     return web.Response(text=page("Where to Play", body, css),
