@@ -70,10 +70,21 @@ def page(title, body, extra_css="", extra_head=""):
 async def handle_api_players(req):
     db = req.app["db"]
     players = await db.get_all_players()
-    data = [{"username": p["username"], "network": p["network"],
-             "level": p["level"], "class": p["class"],
-             "x": p["pos_x"], "y": p["pos_y"],
-             "online": bool(p["is_online"]), "ttl": p["ttl"]} for p in players]
+    data = []
+    for p in players:
+        isum = await db.get_item_sum(p["id"])
+        data.append({
+            "username":  p["username"],
+            "network":   p["network"],
+            "level":     p["level"],
+            "char_class": p["class"],
+            "alignment": p["alignment"],
+            "x":         p["pos_x"],
+            "y":         p["pos_y"],
+            "is_online": bool(p["is_online"]),
+            "ttl":       p["ttl"],
+            "item_sum":  isum,
+        })
     return web.Response(text=json.dumps(data), content_type="application/json")
 
 async def handle_api_events(req):
@@ -116,16 +127,42 @@ td a:hover{color:var(--gold);border-bottom-color:var(--gold)}
 td a:visited{color:var(--muted)}
 tr:last-child td{border-bottom:none}
 """
-    body = f"""<div class="container"><div class="table-wrap"><table>
+    body = """<div class="container"><div class="table-wrap"><table id="lb">
   <thead><tr>
     <th>Player</th><th>Network</th><th>Level</th><th>Class</th>
     <th>Alignment</th><th>Next Level</th><th>Item Sum</th>
   </tr></thead>
-  <tbody>{rows}</tbody>
-</table></div></div>"""
-    return web.Response(
-        text=page("Leaderboard", body, css,
-                  '<meta http-equiv="refresh" content="10">'),
+  <tbody id="lb-body"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Loading...</td></tr></tbody>
+</table></div></div>
+<script>
+const AMAP = {g:'good', e:'evil', n:'neutral'};
+function fmtTTL(s) {
+  s = Math.abs(Math.round(s));
+  const d = Math.floor(s/86400); s %= 86400;
+  const h = Math.floor(s/3600);  s %= 3600;
+  const m = Math.floor(s/60);    s %= 60;
+  return `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+async function refreshLeaderboard() {
+  try {
+    const players = await fetch('/api/players').then(r => r.json());
+    const tbody = document.getElementById('lb-body');
+    tbody.innerHTML = players.map(p => `
+      <tr>
+        <td>${p.is_online ? '🟢' : '⚫'} <a href="/player/${p.username}">${p.username}</a></td>
+        <td>${p.network}</td>
+        <td>${p.level}</td>
+        <td>${p.char_class}</td>
+        <td>${AMAP[p.alignment] || 'neutral'}</td>
+        <td>${fmtTTL(p.ttl)}</td>
+        <td>${p.item_sum}</td>
+      </tr>`).join('');
+  } catch(e) { console.warn('Leaderboard refresh failed', e); }
+}
+refreshLeaderboard();
+setInterval(refreshLeaderboard, 10000);
+</script>"""
+    return web.Response(text=page("Leaderboard", body, css),
         content_type="text/html")
 
 # ── World Map ─────────────────────────────────────────────────────────────────
@@ -290,12 +327,12 @@ offCtx.textAlign='left';
 function draw(){{
   ctx.drawImage(off,0,0);
   // Offline first (behind online)
-  for(const p of players.filter(p=>!p.online)){{
+  for(const p of players.filter(p=>!p.is_online)){{
     ctx.beginPath(); ctx.arc(p.x,p.y,2,0,Math.PI*2);
     ctx.fillStyle='rgba(160,20,20,0.65)'; ctx.fill();
   }}
   // Online: glowing magenta
-  for(const p of players.filter(p=>p.online)){{
+  for(const p of players.filter(p=>p.is_online)){{
     const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,9);
     g.addColorStop(0,'rgba(255,68,204,0.7)');
     g.addColorStop(1,'rgba(255,68,204,0)');
@@ -311,7 +348,7 @@ function draw(){{
 async function fetchPlayers(){{
   try{{
     players = await (await fetch('/api/players')).json();
-    const n = players.filter(p=>p.online).length;
+    const n = players.filter(p=>p.is_online).length;
     document.getElementById('status-bar').textContent =
       `${{n}} online · ${{players.length}} total`;
     draw();
@@ -821,7 +858,7 @@ function renderQuest(q) {
       <div class="quester-num">${i+1}</div>
       <div class="quester-info">
         <b>${p.username}<span class="tag">${p.network}</span></b>
-        <span>Level ${p.level} ${p.class}${q.type==='grid' ? ` · [${p.x}, ${p.y}]` : ''}</span>
+        <span>Level ${p.level} ${p.char_class}${q.type==='grid' ? ` · [${p.x}, ${p.y}]` : ''}</span>
       </div>
     </div>`).join('');
 
@@ -864,7 +901,7 @@ setInterval(fetchQuest, 15000);
 </script>"""
 
     return web.Response(text=page("Quest", body, css,
-                                  '<meta http-equiv="refresh" content="30">'),
+),
                         content_type="text/html")
 
 
