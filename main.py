@@ -13,6 +13,7 @@ from irc.bot import IRCBot
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("main")
+logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 
 CONFIG_PATH = Path(_HERE) / "config.toml"
 DB_PATH     = Path(_HERE) / "multirpg.db"
