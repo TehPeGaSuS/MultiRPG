@@ -1,4 +1,4 @@
-[![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml)  [![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml)  [![CodeQL Advanced](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml)
+[![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml) [![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml) [![CodeQL Advanced](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml)
 
 ---
 
