@@ -13,46 +13,57 @@ A faithful Python reimplementation of [IdleRPG](http://idlerpg.net/) v3.0, exten
 - Python 3.11+
 - `aiosqlite` and `aiohttp`
 
-```bash
-pip install -r requirements.txt
-```
-
 ---
 
 ## Running the Bot
 
 ### First run
 
+Recent Ubuntu releases (22.04+) will refuse `pip install` at the system level with an "externally managed environment" error. Use a virtual environment instead:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python3 main.py
+```
+
+This generates a `config.toml` in the current directory. Stop the bot, edit the file to add your IRC networks, then run again:
+
 ```bash
 python3 main.py
 ```
 
-This generates a `config.toml` in the current directory. Stop the bot, edit the file to add your IRC networks, then run again.
+> **Note:** You need to `source venv/bin/activate` in every new shell session before running the bot, or use the full path to the venv Python directly (see systemd example below).
 
 ### Configuration
 
 ```toml
+[game]
+self_clock = 5
+limit_pen  = 0
+
 [web]
 host = "0.0.0.0"
 port = 8080
 
 [[networks]]
-name       = "PTirc"
-host       = "irc.ptirc.org"
-port       = 6667
+name       = "SwiftIRC"
+host       = "irc.swiftirc.net"
+port       = 6697
 channel    = "#multirpg"
 nick       = "MultiRPG"
-use_ssl    = false
+use_ssl    = true
 # nickserv_pass = "yourpass"
 # server_pass   = "yourpass"
 
 [[networks]]
-name       = "PTnet"
-host       = "irc.ptnet.org"
-port       = 6667
+name       = "Libera"
+host       = "irc.libera.chat"
+port       = 6697
 channel    = "#multirpg"
 nick       = "MultiRPG"
-use_ssl    = false
+use_ssl    = true
 ```
 
 Add as many `[[networks]]` blocks as you like. All networks share the same game world and player database.
@@ -61,11 +72,12 @@ Add as many `[[networks]]` blocks as you like. All networks share the same game 
 
 With **screen**:
 ```bash
+source venv/bin/activate
 screen -S multirpg python3 main.py
 # detach with Ctrl+A, D — reattach with: screen -r multirpg
 ```
 
-With **systemd** (`/etc/systemd/system/multirpg.service`):
+With **systemd** (`/etc/systemd/system/multirpg.service`) — note the venv Python path:
 ```ini
 [Unit]
 Description=Multi IdleRPG Bot
@@ -73,7 +85,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/path/to/MultiRPG
-ExecStart=/usr/bin/python3 main.py
+ExecStart=/path/to/MultiRPG/venv/bin/python3 main.py
 Restart=on-failure
 RestartSec=10
 
@@ -105,6 +117,8 @@ Or add a cron job:
 | `/` | Leaderboard — auto-refreshes every 10s |
 | `/map` | Live world map — terrain, region names, player positions |
 | `/info` | Game info and mechanics |
+| `/quest` | Active quest status |
+| `/play` | Where to play — IRC networks and channels |
 | `/admin` | Admin command reference |
 
 ---
