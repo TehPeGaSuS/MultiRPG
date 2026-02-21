@@ -51,10 +51,16 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
 
     @web.middleware
     async def _middleware(req, handler):
+        import logging
+        _log = logging.getLogger("web.access")
         ip = get_ip(req)
         if not rl.is_allowed(ip):
+            _log.warning("%s RATE LIMITED %s %s", ip, req.method, req.path)
             return rl.response_429()
-        return await handler(req)
+        resp = await handler(req)
+        ver = f"{req.version.major}.{req.version.minor}"
+        _log.info('%s "%s %s HTTP/%s" %s', ip, req.method, req.path, ver, resp.status)
+        return resp
 
     app = web.Application(middlewares=[_middleware])
     app["db"] = db
