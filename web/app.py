@@ -1039,8 +1039,8 @@ tr:last-child th,tr:last-child td{border-bottom:none}
         {row('Class', p['class'])}
         {row('Level', p['level'])}
         {row('Next Level', fmt_ttl(p['ttl']))}
-        {row('Status', f'<span class="{'online' if p['is_online'] else 'offline'}">{status}</span>')}
-        {row('Host', f'<span style="font-size:0.78rem;word-break:break-all">{p['userhost'] or '—'}</span>')}
+        {row('Status', '<span class="' + ('online' if p['is_online'] else 'offline') + '">' + status + '</span>')}
+        {row('Host', '<span style="font-size:0.78rem;word-break:break-all">' + (p['userhost'] or '—') + '</span>')}
         {row('Account Created', fmt_ts(p['created_at']))}
         {row('Last Login', fmt_ts(p['last_login']))}
         {row('Total Idled', fmt_ttl(p['idled']))}
@@ -1072,7 +1072,7 @@ tr:last-child th,tr:last-child td{border-bottom:none}
         {pen_row('Part', p['pen_part'])}
         {pen_row('Quest', p['pen_quest'])}
         {pen_row('Quit', p['pen_quit'])}
-        {row('Total', f'<span class="{'pen-total' if total_pen else 'muted'}">{fmt_pen(total_pen)}</span>')}
+        {row('Total', '<span class="' + ('pen-total' if total_pen else 'muted') + '">' + fmt_pen(total_pen) + '</span>')}
       </table>
     </div>
   </div>

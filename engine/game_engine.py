@@ -1,3 +1,4 @@
+# pylint: disable=E1136
 """engine/game_engine.py — Core IdleRPG game logic."""
 import logging, random, time
 from dataclasses import dataclass
