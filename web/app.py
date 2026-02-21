@@ -941,6 +941,7 @@ async def handle_play(req):
         host    = net.get("host", "")
         port    = net.get("port", 6667)
         channel = net.get("channel", "")
+        nick    = net.get("nick", "MultiRPG")
         tls     = net.get("use_ssl", False)
         tls_str = '<span class="tls-yes">Yes ✓</span>' if tls else '<span class="tls-no">No</span>'
         # Build an irc:// link
@@ -959,6 +960,8 @@ async def handle_play(req):
       <span class="field-value">{tls_str}</span></div>
     <div class="field"><span class="field-label">Channel</span>
       <span class="field-value"><a href="{irc_url}">{channel}</a></span></div>
+    <div class="field"><span class="field-label">Bot Nick</span>
+      <span class="field-value">{nick}</span></div>
   </div>
 </div>"""
 
@@ -969,8 +972,8 @@ async def handle_play(req):
   <h2>🕹️ Where to Play</h2>
   {cards}
   <p class="hint">Click a channel name to open it in your IRC client.<br>
-  All commands are sent via <strong>private message</strong> to <strong>MultiRPG</strong>.<br>
-  Type <code>/msg MultiRPG HELP</code> to get started.</p>
+  All commands are sent via <strong>private message</strong> to the bot.<br>
+  Type <code>/msg {networks[0].get("nick","MultiRPG") if networks else "MultiRPG"} HELP</code> to get started.</p>
 </div>"""
 
     return web.Response(text=page("Where to Play", body, css),
