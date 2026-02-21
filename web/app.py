@@ -1,8 +1,39 @@
 """web/app.py — Leaderboard, live world map, and game info page."""
-import json, time
+import json, time, collections
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
+
+# ── Real IP (Cloudflare tunnel forwards CF-Connecting-IP) ─────────────────────
+def get_ip(req) -> str:
+    return (req.headers.get("CF-Connecting-IP")
+            or req.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or req.transport.get_extra_info("peername", ("unknown",))[0])
+
+# ── Rate limiter — sliding window, in-memory ──────────────────────────────────
+class RateLimiter:
+    def __init__(self, limit: int = 60, window: int = 60):
+        """limit requests per window seconds per IP."""
+        self.limit  = limit
+        self.window = window
+        self._hits: dict[str, collections.deque] = {}
+
+    def is_allowed(self, ip: str) -> bool:
+        now    = time.monotonic()
+        dq     = self._hits.setdefault(ip, collections.deque())
+        cutoff = now - self.window
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= self.limit:
+            return False
+        dq.append(now)
+        return True
+
+    def response_429(self):
+        return web.Response(status=429, text="Too many requests — slow down.",
+                            content_type="text/plain")
+
+_rl = RateLimiter()  # configured in create_app() from config
 
 STATIC = Path(__file__).parent / "static"
 
@@ -12,8 +43,19 @@ async def handle_favicon(req):
     with open(favicon, "r") as f:
         return web.Response(text=f.read(), content_type="image/svg+xml")
 
-def create_app(db: Database, engine=None, networks=None) -> web.Application:
-    app = web.Application()
+def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Application:
+    web_cfg = web_cfg or {}
+    rl_limit  = int(web_cfg.get("rate_limit",  60))
+    rl_window = int(web_cfg.get("rate_window", 60))
+    rl = RateLimiter(limit=rl_limit, window=rl_window)
+
+    async def _middleware(req, handler):
+        ip = get_ip(req)
+        if not rl.is_allowed(ip):
+            return rl.response_429()
+        return await handler(req)
+
+    app = web.Application(middlewares=[_middleware])
     app["db"] = db
     app["engine"] = engine
     app["networks"] = networks or []

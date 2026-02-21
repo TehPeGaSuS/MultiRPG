@@ -41,8 +41,10 @@ nick    = "MultiRPG"
 use_ssl = true
 
 [web]
-host = "0.0.0.0"
-port = 8080
+host         = "0.0.0.0"
+port         = 8080
+rate_limit   = 60   # max requests per IP per window
+rate_window  = 60   # window size in seconds
 """
 
 def load_config():
@@ -106,7 +108,7 @@ async def main():
         from web.app import create_app
         import aiohttp.web as aio_web
         web_cfg    = config.get("web", {})
-        web_runner = aio_web.AppRunner(create_app(db, engine, config.get('networks', [])))
+        web_runner = aio_web.AppRunner(create_app(db, engine, config.get('networks', []), web_cfg))
         await web_runner.setup()
         await aio_web.TCPSite(web_runner,
             web_cfg.get("host","0.0.0.0"), int(web_cfg.get("port",8080))).start()
