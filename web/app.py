@@ -6,12 +6,19 @@ from db.database import Database
 
 STATIC = Path(__file__).parent / "static"
 
+async def handle_favicon(req):
+    import os
+    favicon = os.path.join(os.path.dirname(__file__), "..", "favicon.svg")
+    with open(favicon, "r") as f:
+        return web.Response(text=f.read(), content_type="image/svg+xml")
+
 def create_app(db: Database, engine=None, networks=None) -> web.Application:
     app = web.Application()
     app["db"] = db
     app["engine"] = engine
     app["networks"] = networks or []
     app.router.add_get("/",            handle_index)
+    app.router.add_get("/favicon.svg",   handle_favicon)
     app.router.add_get("/map",         handle_map)
     app.router.add_get("/info",        handle_info)
     app.router.add_get("/admin",       handle_admin)
@@ -57,7 +64,7 @@ nav a:hover{color:var(--gold)}
 
 def page(title, body, extra_css="", extra_head=""):
     return f"""<!DOCTYPE html><html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Multi IdleRPG — {title}</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Multi IdleRPG — {title}</title>
 <style>{COMMON_CSS}{extra_css}</style>{extra_head}</head>
 <body>
 <header><h1>⚔ Multi IdleRPG ⚔</h1><p>The ancient art of doing absolutely nothing</p></header>

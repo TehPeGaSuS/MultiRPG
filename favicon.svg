@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Shield body -->
+  <path d="M16 2 L28 7 L28 17 C28 24 16 30 16 30 C16 30 4 24 4 17 L4 7 Z"
+        fill="#1a1408" stroke="#b8953f" stroke-width="1.5"/>
+  <!-- Shield inner border -->
+  <path d="M16 5 L25 9 L25 17 C25 22.5 16 27.5 16 27.5 C16 27.5 7 22.5 7 17 L7 9 Z"
+        fill="none" stroke="#b8953f" stroke-width="0.75" opacity="0.5"/>
+  <!-- Sword vertical -->
+  <rect x="15" y="8" width="2" height="14" fill="#b8953f" rx="0.5"/>
+  <!-- Sword crossguard -->
+  <rect x="11" y="14" width="10" height="2" fill="#b8953f" rx="0.5"/>
+  <!-- Sword pommel -->
+  <circle cx="16" cy="23" r="1.5" fill="#b8953f"/>
+  <!-- Sword tip -->
+  <polygon points="15,8 17,8 16,5" fill="#b8953f"/>
+</svg>
