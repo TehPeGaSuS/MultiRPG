@@ -769,8 +769,8 @@ async def handle_api_quest(req):
                           "level": x["level"], "char_class": x["class"],
                           "x": x.get("pos_x", 0), "y": x.get("pos_y", 0)}
                          for x in q["questers"]],
-            "p1name": q.get("p1name", f"[{target[0]},{target[1]}]"),
-            "p2name": q.get("p2name", ""),
+            "p1name": f"{q.get('p1name', '')} [{target[0]}, {target[1]}]".strip(),
+            "p2name": f"{q.get('p2name', '')} [{q['p2'][0]}, {q['p2'][1]}]".strip() if q.get('p2') else "",
         }
     return web.Response(text=json.dumps(data), content_type="application/json")
 
