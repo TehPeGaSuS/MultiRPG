@@ -71,6 +71,19 @@ async def game_tick_loop(engine, manager, self_clock):
         try:
             broadcasts = await engine.tick()
             if broadcasts: await manager.deliver_all(broadcasts)
+            # After a round reset, re-WHO every channel to restore online status
+            if engine._post_reset_who:
+                engine._post_reset_who = False
+                await asyncio.sleep(2)  # brief pause so reset msg lands first
+                for bot in manager.bots:
+                    all_players = await engine.db.get_all_players()
+                    bot._prev_online = {
+                        p["userhost"]: p["username"]
+                        for p in all_players if p["userhost"]
+                    }
+                    if bot._prev_online:
+                        await bot._raw(f"WHO {bot.channel}")
+                        log.info(f"[{bot.network_name}] Post-reset WHO sent")
         except Exception as e:
             log.error(f"Tick error: {e}", exc_info=True)
         await asyncio.sleep(self_clock)

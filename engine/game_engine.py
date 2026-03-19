@@ -174,6 +174,7 @@ class GameEngine:
         self.paused          = False  # PAUSE command stops tick processing
         self._reset_pending  = False  # True during 60s end-of-round grace period
         self._reset_at       = 0      # timestamp when reset fires
+        self._post_reset_who = False  # signal bots to re-WHO after round reset
         self.silent     = 0          # 0=all, 1=no chan, 2=no pm, 3=no both
         self._quest = {
             "questers": [], "type": 1, "stage": 1,
@@ -877,8 +878,9 @@ class GameEngine:
         await self.db.reset_round()
 
         # Clear reset flag
-        self._reset_pending = False
-        self._reset_at      = 0
+        self._reset_pending  = False
+        self._reset_at       = 0
+        self._post_reset_who = True  # signal bots to re-WHO the channel
 
         msg1 = (f"⚔️ End of Round {round_num}! "
                 f"{winners_str}  "
