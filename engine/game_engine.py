@@ -401,7 +401,11 @@ class GameEngine:
             ("Antarctica's Edge",  319, 428),
             ("The Endless Deep",   428, 445),
         ]
-        lm1, lm2 = random.sample(LANDMARKS, 2)
+        avg_x     = sum(q["pos_x"] for q in questers) // len(questers)
+        avg_y     = sum(q["pos_y"] for q in questers) // len(questers)
+        lm_sorted = sorted(LANDMARKS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
+        lm_pool   = lm_sorted[:max(4, len(lm_sorted)//2)]
+        lm1, lm2  = random.sample(lm_pool, 2)
         self._quest["type"]   = 2
         self._quest["stage"]  = 1
         self._quest["p1"]     = (lm1[1], lm1[2])
@@ -682,7 +686,7 @@ class GameEngine:
                 x   = player_state[pid]["pos_x"]
                 y   = player_state[pid]["pos_y"]
 
-                if pid in qids and q["type"] == 2 and random.random() < 0.01:
+                if pid in qids and q["type"] == 2 and random.random() < 0.33:
                     t  = q["p1"] if q["stage"] == 1 else q["p2"]
                     dx = 1 if x < t[0] else -1 if x > t[0] else 0
                     dy = 1 if y < t[1] else -1 if y > t[1] else 0
@@ -819,7 +823,11 @@ class GameEngine:
         else:
             self._quest["type"]   = 2
             self._quest["stage"]  = 1
-            lm1, lm2 = random.sample(LANDMARKS, 2)
+            avg_x = sum(q["pos_x"] for q in questers) // len(questers)
+            avg_y = sum(q["pos_y"] for q in questers) // len(questers)
+            lm_sorted = sorted(LANDMARKS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
+            lm_pool   = lm_sorted[:max(4, len(lm_sorted)//2)]
+            lm1, lm2  = random.sample(lm_pool, 2)
             self._quest["p1"]     = (lm1[1], lm1[2])
             self._quest["p2"]     = (lm2[1], lm2[2])
             self._quest["p1name"] = lm1[0]
