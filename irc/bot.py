@@ -200,6 +200,20 @@ class IRCBot:
                 self.engine.mark_joined()
             return
 
+        # ── Auto-login by userhost when a user joins the channel ──────────────
+        # If their user@host matches a registered (offline) player, log them in
+        # silently so AFK reconnects don't break their idle streak.
+        if command == "JOIN" and usernick != self.current_nick:
+            uh = prefix if "!" in prefix else ""
+            if uh and "!" in uh:
+                p = await self.engine.db.get_player_by_userhost(uh, self.network_name)
+                if p:
+                    await self.engine.db.set_online(
+                        p["id"], usernick, self.channel, uh)
+                    log.info(
+                        f"[{self.network_name}] Auto-login: {usernick} ({uh}) → {p['username']}")
+            return
+
         # Ignore our own messages for all other commands
         if usernick == self.current_nick:
             return
@@ -321,7 +335,7 @@ class IRCBot:
 
         elif cmd == "HELP":
             for line in [
-                "MultiRPG commands (all via PM to the bot):",
+                "IdleRPG commands (all via PM to the bot):",
                 "  REGISTER <username> <password> <class>  — Create account",
                 "  LOGIN <username> <password>              — Log in",
                 "  LOGOUT                                   — Log out (penalty!)",

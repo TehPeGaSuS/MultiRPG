@@ -227,17 +227,42 @@ setInterval(refreshLeaderboard, 10000);
 # The basemap is 500x500. These coords place labels at the visual centre of
 # each region as they appear on the original basemap, reproduced faithfully.
 MAP_REGIONS = [
-    # Faithfully reproduced from the original basemap.png by res0 & Jeb
-    ["Denmark",                     55,  30, "region"],
-    ["Mountains of Qwok",          262,  28, "region"],
-    ["The Land of Qwok",           385,  72, "region"],
-    ["Jow Botzi Territory",        140, 172, "region"],
-    ["Veluragh",                   378, 210, "region"],
-    ["Secret Passage to Bharash",   58, 258, "region"],
-    ["Towers of Ankh-Allor",       265, 338, "region"],
-    ["The Great Shalit Mountains",  55, 402, "region"],
-    ["Prnalvph",                   415, 438, "region"],
+    # Pirate World Map — coords match the 500x500 basemap
+    ["The Roaring Swell",        160, 175, "region"],
+    ["Serpent's Current",        340, 160, "region"],
+    ["Kraken Deep",               80, 385, "region"],
+    ["The Pirate Current",       410, 270, "region"],
+    ["Serpent's Reef",           360, 295, "region"],
+    ["Smuggler's Roost",          90, 240, "region"],
+    ["Siren's Watch",            155, 315, "region"],
+    ["Tortuga Haven",            210, 195, "region"],
+    ["Port Royal",               195, 258, "region"],
+    ["Deadman's Cove",           245, 185, "region"],
+    ["The Pirate King's Keep",   280, 258, "region"],
+    ["Mermaid's Lagoon",         320, 258, "region"],
+    ["Blackbeard's Cove",        330, 195, "region"],
+    ["Smuggler's Run",           305, 325, "region"],
+    ["Gallows' Reach",           335, 338, "region"],
+    ["Shipwreck Reef",           378, 258, "region"],
+    ["Cutthroat Cove",           390, 335, "region"],
+    ["Skull Island",             430, 120, "region"],
+    ["Barnacle Bay",             450, 205, "region"],
+    ["Whaler's Notch",           468, 112, "region"],
+    ["Buccaneer's Point",        440, 322, "region"],
+    ["Marauder's Bay",           412, 392, "region"],
+    ["Rum Runner's Isle",        340, 425, "region"],
+    ["Freeport",                 468, 362, "region"],
 ]
+
+# Lookup: find nearest named landmark to a coordinate
+def nearest_landmark(x, y):
+    best, best_d = MAP_REGIONS[0][0], float('inf')
+    for name, rx, ry, _ in MAP_REGIONS:
+        d = ((rx - x) ** 2 + (ry - y) ** 2) ** 0.5
+        if d < best_d:
+            best_d = d
+            best = name
+    return best
 
 async def handle_map(req):
     regions_js = json.dumps(MAP_REGIONS)
@@ -265,7 +290,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
 .dot-on{background:#ff44cc;box-shadow:0 0 6px #ff44cc}
 .dot-off{background:#cc2222;box-shadow:0 0 3px #cc2222}
-.dot-city{width:5px;height:5px;background:#c9a84c;border-radius:50%}
+.dot-off{background:#dc2828;box-shadow:0 0 8px rgba(220,40,40,0.8)}
 #tooltip{position:fixed;background:rgba(13,10,6,0.95);border:1px solid var(--border);
           color:var(--text);padding:0.25rem 0.55rem;border-radius:3px;font-size:0.75rem;
           pointer-events:none;display:none;z-index:100;font-family:'Cinzel',serif;
@@ -284,7 +309,6 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
       <div id="legend">
         <div class="legend-row"><span class="dot dot-on"></span> Online player</div>
         <div class="legend-row"><span class="dot dot-off"></span> Offline player</div>
-        <div class="legend-row"><span class="dot dot-city"></span> City / landmark</div>
       </div>
     </div>
     <div id="status-bar">Loading…</div>
@@ -300,158 +324,98 @@ let players = [];
 // ── Region data ─────────────────────────────────────────────────────────────
 const REGIONS = {regions_js};
 
-// ── Noise / terrain ──────────────────────────────────────────────────────────
-function noise(x,y,s=42){{const n=Math.sin(x*127.1+y*311.7+s*74.3)*43758.5453;return n-Math.floor(n);}}
-function smooth(x,y,sc){{
-  const gx=Math.floor(x/sc),gy=Math.floor(y/sc);
-  const fx=(x%sc)/sc, fy=(y%sc)/sc;
-  const sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
-  return noise(gx,gy)*(1-sx)*(1-sy)+noise(gx+1,gy)*sx*(1-sy)
-        +noise(gx,gy+1)*(1-sx)*sy  +noise(gx+1,gy+1)*sx*sy;
-}}
-function terrainAt(x,y){{
-  const v=smooth(x,y,100)*0.5+smooth(x,y,40)*0.3+smooth(x,y,15)*0.2;
-  if(v<0.32)return'deep water'; if(v<0.40)return'water'; if(v<0.44)return'beach';
-  if(v<0.62)return'grassland';  if(v<0.72)return'forest';if(v<0.82)return'highlands';
-  return'mountain';
-}}
-const TCOL={{
-  'deep water':[13,42,74],'water':[26,74,122],'beach':[200,176,106],
-  'grassland':[45,110,45],'forest':[26,74,26],'highlands':[90,106,58],'mountain':[122,122,122]
+// ── Load map image as background ──────────────────────────────────────────────
+const off = document.createElement('canvas'); off.width=W; off.height=H;
+const offCtx = off.getContext('2d');
+const mapImg = new Image();
+mapImg.src = '/static/map.png';
+mapImg.onload = () => {{
+  offCtx.drawImage(mapImg, 0, 0, W, H);
+  drawReady = true;
+  draw();
 }};
-
-// ── Build terrain offscreen once ─────────────────────────────────────────────
-const off=document.createElement('canvas'); off.width=W; off.height=H;
-const offCtx=off.getContext('2d');
-const img=offCtx.createImageData(W,H); const d=img.data;
-for(let y=0;y<H;y++) for(let x=0;x<W;x++){{
-  const t=terrainAt(x,y);const[r,g,b]=TCOL[t];
-  const v=noise(x,y,7)*16-8; const i=(y*W+x)*4;
-  d[i]=Math.min(255,Math.max(0,r+v));
-  d[i+1]=Math.min(255,Math.max(0,g+v));
-  d[i+2]=Math.min(255,Math.max(0,b+v));
-  d[i+3]=255;
-}}
-offCtx.putImageData(img,0,0);
-
-// Grid lines
-offCtx.strokeStyle='rgba(255,255,255,0.035)'; offCtx.lineWidth=0.5;
-for(let i=0;i<=W;i+=50){{
-  offCtx.beginPath();offCtx.moveTo(i,0);offCtx.lineTo(i,H);offCtx.stroke();
-  offCtx.beginPath();offCtx.moveTo(0,i);offCtx.lineTo(W,i);offCtx.stroke();
-}}
-offCtx.font='7px monospace'; offCtx.fillStyle='rgba(255,255,255,0.15)';
-for(let i=50;i<W;i+=50){{ offCtx.fillText(i,i+2,9); offCtx.fillText(i,2,i+8); }}
-
-// ── Region & city labels ──────────────────────────────────────────────────────
-// Drawn onto the offscreen canvas so they bake into the basemap
-const REGION_FONT_SIZE = 16; // px — change freely, labels always stay inside map
-const MARGIN = 4;             // min px gap from map edge
-
-offCtx.textAlign='center';
-for(const[name,x,y,type] of REGIONS){{
-  if(type==='region'){{
-    offCtx.font=`italic bold ${{REGION_FONT_SIZE}}px serif`;
-    // Measure so we can clamp the draw position inside the canvas
-    const hw = offCtx.measureText(name).width / 2; // half-width (centred text)
-    const cx = Math.min(Math.max(x, hw + MARGIN), W - hw - MARGIN);
-    const cy = Math.min(Math.max(y, REGION_FONT_SIZE + MARGIN), H - MARGIN);
-    // White halo for readability on any terrain
-    offCtx.strokeStyle='rgba(255,255,255,0.75)';
-    offCtx.lineWidth=3;
-    offCtx.strokeText(name,cx,cy);
-    // Black fill
-    offCtx.fillStyle='rgba(0,0,0,0.9)';
-    offCtx.fillText(name,cx,cy);
-  }} else {{
-    // Small gold dot for city
-    offCtx.beginPath(); offCtx.arc(x,y,2,0,Math.PI*2);
-    offCtx.fillStyle='rgba(201,168,76,0.85)'; offCtx.fill();
-    // City name right of dot, tiny
-    offCtx.font='7px sans-serif'; offCtx.textAlign='left';
-    const nw = offCtx.measureText(name).width;
-    const nx = (x + 4 + nw > W - MARGIN) ? x - 4 - nw : x + 4;
-    offCtx.strokeStyle='rgba(255,255,255,0.6)'; offCtx.lineWidth=1.5;
-    offCtx.strokeText(name,nx,y);
-    offCtx.fillStyle='rgba(0,0,0,0.85)'; offCtx.fillText(name,nx,y);
-    offCtx.textAlign='center';
-  }}
-}}
-offCtx.textAlign='left';
+let drawReady = false;
 
 // ── Render ────────────────────────────────────────────────────────────────────
-function draw(){{
-  ctx.drawImage(off,0,0);
+function drawDot(ctx, x, y, online) {{
+  const color  = online ? [255, 68, 204] : [220, 40, 40];
+  const [r,g,b] = color;
+  const outerR = online ? 12 : 10;
+  const innerR = online ? 4.5 : 3.5;
+  // Outer glow
+  const g2 = ctx.createRadialGradient(x, y, 0, x, y, outerR);
+  g2.addColorStop(0, `rgba(${{r}},${{g}},${{b}},0.75)`);
+  g2.addColorStop(1, `rgba(${{r}},${{g}},${{b}},0)`);
+  ctx.beginPath(); ctx.arc(x, y, outerR, 0, Math.PI*2);
+  ctx.fillStyle = g2; ctx.fill();
+  // Inner dot
+  ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(${{r}},${{g}},${{b}},0.95)`; ctx.fill();
+  ctx.strokeStyle = online ? '#ff44cc' : '#ff2020';
+  ctx.lineWidth = 1; ctx.stroke();
+}}
+
+function draw() {{
+  if (!drawReady) return;
+  ctx.drawImage(off, 0, 0);
   // Offline first (behind online)
-  for(const p of players.filter(p=>!p.is_online)){{
-    ctx.beginPath(); ctx.arc(p.x,p.y,2,0,Math.PI*2);
-    ctx.fillStyle='rgba(160,20,20,0.65)'; ctx.fill();
-  }}
-  // Online: glowing magenta
-  for(const p of players.filter(p=>p.is_online)){{
-    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,9);
-    g.addColorStop(0,'rgba(255,68,204,0.7)');
-    g.addColorStop(1,'rgba(255,68,204,0)');
-    ctx.beginPath(); ctx.arc(p.x,p.y,9,0,Math.PI*2);
-    ctx.fillStyle=g; ctx.fill();
-    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2);
-    ctx.fillStyle='#ff99ee'; ctx.fill();
-    ctx.strokeStyle='#ff44cc'; ctx.lineWidth=0.8; ctx.stroke();
-  }}
+  for (const p of players.filter(p => !p.is_online)) drawDot(ctx, p.x, p.y, false);
+  // Online on top
+  for (const p of players.filter(p =>  p.is_online)) drawDot(ctx, p.x, p.y, true);
 }}
 
 // ── Data refresh ──────────────────────────────────────────────────────────────
-async function fetchPlayers(){{
-  try{{
+async function fetchPlayers() {{
+  try {{
     players = await (await fetch('/api/players')).json();
-    const n = players.filter(p=>p.is_online).length;
+    const n = players.filter(p => p.is_online).length;
     document.getElementById('status-bar').textContent =
       `${{n}} online · ${{players.length}} total`;
     draw();
-  }} catch(e) {{ document.getElementById('status-bar').textContent='Connection error'; }}
+  }} catch(e) {{ document.getElementById('status-bar').textContent = 'Connection error'; }}
 }}
 
 // ── Nearest region lookup ─────────────────────────────────────────────────────
-function regionAt(mx,my){{
-  let best=null, bestD=55;
-  for(const[name,x,y,type] of REGIONS){{
-    const dist=Math.hypot(x-mx,y-my);
-    if(dist<bestD){{ bestD=dist; best={{name,type}}; }}
+function regionAt(mx, my) {{
+  let best = null, bestD = 80;
+  for (const [name, x, y] of REGIONS) {{
+    const d = Math.hypot(x - mx, y - my);
+    if (d < bestD) {{ bestD = d; best = name; }}
   }}
   return best;
 }}
 
-// ── Hover ──────────────────────────────────────────────────────────────────────
-const hoverEl  = document.getElementById('hover-info');
+// ── Hover ─────────────────────────────────────────────────────────────────────
+const hoverEl = document.getElementById('hover-info');
 const tooltip  = document.getElementById('tooltip');
 
-canvas.addEventListener('mousemove', e=>{{
-  const r=canvas.getBoundingClientRect();
-  const mx=(e.clientX-r.left)*(W/r.width);
-  const my=(e.clientY-r.top)*(H/r.height);
-  const hit    = players.find(p=>Math.hypot(p.x-mx,p.y-my)<7);
-  const terrain= terrainAt(Math.round(mx),Math.round(my));
-  const region = regionAt(mx,my);
-  const locLine= region
-    ? `<span class="region-name">${{region.name}}</span><br><span style="opacity:.6;font-size:.78rem">${{terrain}}</span>`
-    : `<b>[${{Math.round(mx)}}, ${{Math.round(my)}}]</b><br><span style="opacity:.6">${{terrain}}</span>`;
+canvas.addEventListener('mousemove', e => {{
+  const r  = canvas.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * (W / r.width);
+  const my = (e.clientY - r.top)  * (H / r.height);
+  const hit    = players.find(p => Math.hypot(p.x - mx, p.y - my) < 8);
+  const region = regionAt(mx, my);
+  const locLine = region
+    ? `<span class="region-name">${{region}}</span>`
+    : `<b>[${{Math.round(mx)}}, ${{Math.round(my)}}]</b>`;
 
-  if(hit){{
+  if (hit) {{
     hoverEl.innerHTML =
       `<b>${{hit.username}}</b> @${{hit.network}}<br>` +
-      `Lv.${{hit.level}} ${{hit.class}}<br>` +
-      `[${{hit.x}}, ${{hit.y}}] · ${{hit.online?'🟢':'🔴'}}<br>` +
+      `Lv.${{hit.level}} ${{hit.char_class}}<br>` +
+      `[${{hit.x}}, ${{hit.y}}] · ${{hit.is_online ? '🟢' : '🔴'}}<br>` +
       locLine;
-    tooltip.style.cssText=`display:block;left:${{e.clientX+14}}px;top:${{e.clientY-10}}px`;
-    tooltip.textContent=`${{hit.username}} lv.${{hit.level}}`;
+    tooltip.style.cssText = `display:block;left:${{e.clientX+14}}px;top:${{e.clientY-10}}px`;
+    tooltip.textContent = `${{hit.username}} lv.${{hit.level}}`;
   }} else {{
-    hoverEl.innerHTML=locLine;
-    tooltip.style.display='none';
+    hoverEl.innerHTML = locLine;
+    tooltip.style.display = 'none';
   }}
 }});
-canvas.addEventListener('mouseleave',()=>{{
-  tooltip.style.display='none';
-  hoverEl.innerHTML='Hover over the map<br>to inspect players<br>and terrain.';
+
+canvas.addEventListener('mouseleave', () => {{
+  hoverEl.innerHTML = 'Hover over the map<br>to inspect players<br>and regions.';
+  tooltip.style.display = 'none';
 }});
 
 fetchPlayers();
@@ -796,7 +760,7 @@ async def handle_api_quest(req):
             "text":      q["text"],
             "time_left": max(0, q["qtime"] - now),
             "questers":  [{"username": x["username"], "network": x["network"],
-                           "level": x["level"], "class": x["class"]}
+                           "level": x["level"], "char_class": x["class"]}
                           for x in q["questers"]],
         }
     else:
@@ -808,9 +772,11 @@ async def handle_api_quest(req):
             "stage":    q["stage"],
             "target":   target,
             "questers": [{"username": x["username"], "network": x["network"],
-                          "level": x["level"], "class": x["class"],
+                          "level": x["level"], "char_class": x["class"],
                           "x": x.get("pos_x", 0), "y": x.get("pos_y", 0)}
                          for x in q["questers"]],
+            "p1name": q.get("p1name", f"[{target[0]},{target[1]}]"),
+            "p2name": q.get("p2name", ""),
         }
     return web.Response(text=json.dumps(data), content_type="application/json")
 
@@ -896,7 +862,7 @@ function renderQuest(q) {
         <b>Time to Completion</b><span id="countdown">${fmtTime(_timeLeft)}</span>
       </div>`;
   } else {
-    const stageTarget = q.target;
+    const destName = q.stage === 1 ? q.p1name : q.p2name;
     metaHtml = `
       <div class="meta-item">
         <b>Type</b><span>${typeLabel}</span>
@@ -905,7 +871,7 @@ function renderQuest(q) {
         <b>Stage</b><span>${q.stage} of 2</span>
       </div>
       <div class="meta-item">
-        <b>Current Target</b><span>[${stageTarget[0]}, ${stageTarget[1]}]</span>
+        <b>Destination</b><span>${destName}</span>
       </div>`;
   }
 
@@ -1183,37 +1149,15 @@ const ctx=cv.getContext('2d');
 const W=500,H=500;
 const PX={px},PY={py};
 
-function noise(x,y,s=42){{const n=Math.sin(x*127.1+y*311.7+s*74.3)*43758.5453;return n-Math.floor(n);}}
-function smooth(x,y,sc){{
-  const gx=Math.floor(x/sc),gy=Math.floor(y/sc);
-  const fx=(x%sc)/sc,fy=(y%sc)/sc;
-  const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);
-  return noise(gx,gy)*(1-sx)*(1-sy)+noise(gx+1,gy)*sx*(1-sy)
-        +noise(gx,gy+1)*(1-sx)*sy  +noise(gx+1,gy+1)*sx*sy;
-}}
-const TCOL={{
-  'deep water':[13,42,74],'water':[26,74,122],'beach':[200,176,106],
-  'grassland':[45,110,45],'forest':[26,74,26],'highlands':[90,106,58],'mountain':[122,122,122]
+// Load pirate map image as background
+const mapImg = new Image();
+mapImg.src = '/static/map.png';
+mapImg.onload = () => {{
+  ctx.drawImage(mapImg, 0, 0, W, H);
+  drawDot();
 }};
-function terrainAt(x,y){{
-  const v=smooth(x,y,100)*0.5+smooth(x,y,40)*0.3+smooth(x,y,15)*0.2;
-  if(v<0.32)return'deep water';if(v<0.40)return'water';if(v<0.44)return'beach';
-  if(v<0.62)return'grassland';if(v<0.72)return'forest';if(v<0.82)return'highlands';
-  return'mountain';
-}}
 
-// Full 500x500 terrain — identical to world map
-const img=ctx.createImageData(W,H);const d=img.data;
-for(let y=0;y<H;y++)for(let x=0;x<W;x++){{
-  const t=terrainAt(x,y);const[r,g,b]=TCOL[t];
-  const v=noise(x,y,7)*16-8;const i=(y*W+x)*4;
-  d[i]=Math.min(255,Math.max(0,r+v));
-  d[i+1]=Math.min(255,Math.max(0,g+v));
-  d[i+2]=Math.min(255,Math.max(0,b+v));
-  d[i+3]=255;
-}}
-ctx.putImageData(img,0,0);
-
+function drawDot() {{
 // Player dot — glowing magenta
 const g2=ctx.createRadialGradient(PX,PY,0,PX,PY,12);
 g2.addColorStop(0,'rgba(255,68,204,0.85)');
@@ -1236,6 +1180,7 @@ ctx.fillStyle='rgba(0,0,0,0.82)';
 ctx.fillRect(lx-lw/2-5,ly-15,lw+10,20);
 ctx.fillStyle='#ffccee';
 ctx.fillText(lbl,lx,ly);
+}}
 </script>
 """
 
