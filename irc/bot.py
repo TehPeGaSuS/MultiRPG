@@ -200,6 +200,18 @@ class IRCBot:
                 self.engine.mark_joined()
             return
 
+        # ── Auto-login by userhost when a user joins the channel ──────────────
+        if command == "JOIN" and usernick != self.current_nick:
+            uh = prefix if "!" in prefix else ""
+            if uh and "!" in uh:
+                p = await self.engine.db.get_player_by_userhost(uh, self.network_name)
+                if p:
+                    await self.engine.db.set_online(
+                        p["id"], usernick, self.channel, uh)
+                    log.info(
+                        f"[{self.network_name}] Auto-login: {usernick} ({uh}) → {p['username']}")
+            return
+
         # Ignore our own messages for all other commands
         if usernick == self.current_nick:
             return
@@ -307,7 +319,7 @@ class IRCBot:
 
         elif cmd == "QUEST":
             if not await self._is_admin(nick): await reply("Access denied."); return
-            bcast = await self.engine.cmd_quest()
+            bcast = await self.engine.cmd_forcequest()
             if bcast:
                 await self._deliver_local(bcast)
             else:
