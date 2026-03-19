@@ -62,6 +62,70 @@ class Database:
         async with self.conn.execute("SELECT * FROM players WHERE id=?", (pid,)) as c:
             return await c.fetchone()
 
+    # ── Quest persistence ─────────────────────────────────────────────────────
+
+    async def save_quest(self, quest: dict):
+        """Persist current quest state to DB singleton row."""
+        questers = quest.get("questers", [])
+        ids = [q["id"] for q in questers] + [None] * 4
+        p1 = quest.get("p1") or (None, None)
+        p2 = quest.get("p2") or (None, None)
+        await self.conn.execute("""
+            UPDATE quest SET
+                active=?, quest_type=?, stage=?, text=?, qtime=?,
+                p1x=?, p1y=?, p1name=?, p2x=?, p2y=?, p2name=?,
+                quester1_id=?, quester2_id=?, quester3_id=?, quester4_id=?
+            WHERE id=1""", (
+            1 if questers else 0,
+            quest.get("type", 1), quest.get("stage", 1),
+            quest.get("text", ""), int(quest.get("qtime", 0)),
+            p1[0], p1[1], quest.get("p1name", ""),
+            p2[0], p2[1], quest.get("p2name", ""),
+            ids[0], ids[1], ids[2], ids[3],
+        ))
+        await self.conn.commit()
+
+    async def load_quest(self) -> dict:
+        """Load quest state from DB. Returns empty quest dict if none active."""
+        empty = {"questers": [], "type": 1, "stage": 1,
+                 "p1": None, "p2": None, "qtime": 0, "text": "",
+                 "p1name": "", "p2name": ""}
+        async with self.conn.execute("SELECT * FROM quest WHERE id=1") as c:
+            row = await c.fetchone()
+        if not row or not row["active"]:
+            return empty
+        # Load questers
+        qids = [row["quester1_id"], row["quester2_id"],
+                row["quester3_id"], row["quester4_id"]]
+        questers = []
+        for qid in qids:
+            if qid:
+                p = await self.get_player_by_id(qid)
+                if p:
+                    questers.append(dict(p))
+        if not questers:
+            return empty
+        p1 = (row["p1x"], row["p1y"]) if row["p1x"] is not None else None
+        p2 = (row["p2x"], row["p2y"]) if row["p2x"] is not None else None
+        return {
+            "questers": questers,
+            "type":     row["quest_type"],
+            "stage":    row["stage"],
+            "text":     row["text"],
+            "qtime":    row["qtime"],
+            "p1":       p1,
+            "p2":       p2,
+            "p1name":   row["p1name"] or "",
+            "p2name":   row["p2name"] or "",
+        }
+
+    async def clear_quest(self):
+        """Mark quest as inactive in DB."""
+        await self.conn.execute(
+            "UPDATE quest SET active=0, quester1_id=NULL, quester2_id=NULL,"
+            " quester3_id=NULL, quester4_id=NULL WHERE id=1")
+        await self.conn.commit()
+
     async def get_player_by_userhost(self, userhost, network):
         """Find an offline player whose stored userhost matches — for auto-login on JOIN."""
         async with self.conn.execute(

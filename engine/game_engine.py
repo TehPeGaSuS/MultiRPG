@@ -179,6 +179,14 @@ class GameEngine:
             "text": "",
         }
 
+    async def load_persisted_quest(self):
+        """Restore any in-progress quest from DB after restart."""
+        q = await self.db.load_quest()
+        if q["questers"]:
+            self._quest = q
+            names = ", ".join(f"{x['username']}@{x['network']}" for x in q["questers"])
+            log.info(f"Restored active quest: {q['text']!r} — questers: {names}")
+
     def mark_joined(self):
         self._lasttime = int(time.time())
         log.info(f"Engine: mark_joined at {self._lasttime}")
@@ -384,6 +392,7 @@ class GameEngine:
                f"{self._quest['text']}. "
                f"First reach {lm1[0]}, then {lm2[0]}.")
         await self.db.log_event("quest", msg)
+        await self.db.save_quest(self._quest)
         return [broadcast_all(msg)]
 
     async def cmd_newpass(self, nick, network, pw) -> str:
@@ -473,6 +482,7 @@ class GameEngine:
         q["qtime"]    = int(time.time()) + 43200
         for p in await self.db.get_online_players():
             await self.db.add_penalty(p["id"], int(15 * (RP_PEN_STEP ** p["level"])), "pen_quest")
+        await self.db.clear_quest()
         await self.db.commit()
         return [broadcast_all(
             f"{utag(player)}'s actions have brought the wrath of the gods "
@@ -670,6 +680,7 @@ class GameEngine:
             ):
                 if q["stage"] == 1:
                     q["stage"] = 2
+                    await self.db.save_quest(self._quest)
                 else:
                     names = ", ".join(
                         f"{x['username']}@{x['network']}" for x in q["questers"])
@@ -682,6 +693,7 @@ class GameEngine:
                             await self.db.update_ttl(x["id"], int(fp["ttl"] * 0.75))
                     q["questers"] = []
                     q["qtime"]    = int(time.time()) + 3600
+                    await self.db.clear_quest()
                     await self.db.log_event("quest", msg)
         return msgs
 
@@ -702,6 +714,7 @@ class GameEngine:
                     await self.db.update_ttl(x["id"], int(fp["ttl"] * 0.75))
             q["questers"] = []
             q["qtime"]    = now + 21600
+            await self.db.clear_quest()
             await self.db.log_event("quest", msg)
             return [broadcast_all(msg)]
         return []
@@ -770,6 +783,7 @@ class GameEngine:
             msg = (f"{names} have been chosen by the gods to {text}. "
                    f"First reach {lm1[0]}, then {lm2[0]}.")
         await self.db.log_event("quest", msg)
+        await self.db.save_quest(self._quest)
         return [broadcast_all(msg)]
 
     # ── Daily events ──────────────────────────────────────────────────────────

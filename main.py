@@ -85,6 +85,7 @@ async def main():
     self_clock = int(game_cfg.get("self_clock", 5))
     limit_pen  = int(game_cfg.get("limit_pen",  0))
     engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen)
+    await engine.load_persisted_quest()
 
     manager = BotManager()
     for net in config.get("networks", []):

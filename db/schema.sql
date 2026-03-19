@@ -59,3 +59,25 @@ CREATE INDEX IF NOT EXISTS idx_players_online  ON players(is_online);
 CREATE INDEX IF NOT EXISTS idx_players_network ON players(network);
 CREATE INDEX IF NOT EXISTS idx_players_pos     ON players(pos_x, pos_y);
 CREATE INDEX IF NOT EXISTS idx_events_time     ON events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS quest (
+    id          INTEGER PRIMARY KEY CHECK(id=1),  -- singleton row
+    active      INTEGER NOT NULL DEFAULT 0,
+    quest_type  INTEGER NOT NULL DEFAULT 1,        -- 1=time, 2=grid
+    stage       INTEGER NOT NULL DEFAULT 1,
+    text        TEXT    NOT NULL DEFAULT '',
+    qtime       INTEGER NOT NULL DEFAULT 0,
+    p1x         INTEGER,
+    p1y         INTEGER,
+    p1name      TEXT,
+    p2x         INTEGER,
+    p2y         INTEGER,
+    p2name      TEXT,
+    quester1_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+    quester2_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+    quester3_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+    quester4_id INTEGER REFERENCES players(id) ON DELETE SET NULL
+);
+
+-- Ensure the singleton row always exists
+INSERT OR IGNORE INTO quest (id, active) VALUES (1, 0);
