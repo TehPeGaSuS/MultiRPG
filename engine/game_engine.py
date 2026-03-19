@@ -402,52 +402,6 @@ class GameEngine:
         await self.db.update_username(p["id"], new_name)
         return f"Username changed from {target} to {new_name}."
 
-    async def cmd_quest(self) -> list:
-        """Admin: force-start a quest immediately, ignoring timer and eligibility floor."""
-        if self._quest["questers"]:
-            return [broadcast_all("A quest is already in progress.")]
-        online = await self.db.get_online_players()
-        # Relax eligibility: any online player, any level
-        eligible = [p for p in online]
-        if len(eligible) < 4:
-            return [broadcast_all(
-                f"Not enough online players to start a quest (need 4, have {len(eligible)}).")]
-        result = await self._start_quest(online)
-        if not result:
-            # _start_quest still enforces lv40+ — override by forcing any 4
-            import random as _r
-            questers = _r.sample(eligible, min(4, len(eligible)))
-            self._quest["questers"] = questers
-            names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
-            import time as _t
-            now = int(_t.time())
-            LANDMARKS = [
-                ("Deadman's Cove",245,185),("The Pirate King's Keep",280,258),
-                ("Skull Island",430,120),("Port Royal",195,258),
-                ("Mermaid's Lagoon",320,258),("Blackbeard's Cove",330,195),
-                ("Smuggler's Run",305,325),("Gallows' Reach",335,338),
-                ("Shipwreck Reef",378,258),("Kraken Deep",80,385),
-                ("Smuggler's Roost",90,240),("Siren's Watch",155,315),
-                ("Cutthroat Cove",390,335),("Barnacle Bay",450,205),
-                ("Marauder's Bay",412,392),("Rum Runner's Isle",340,425),
-                ("Freeport",468,362),("Whaler's Notch",468,112),
-                ("Buccaneer's Point",440,322),("Tortuga Haven",210,195),
-            ]
-            lm1, lm2 = _r.sample(LANDMARKS, 2)
-            self._quest["type"]   = 2
-            self._quest["stage"]  = 1
-            self._quest["p1"]     = (lm1[1], lm1[2])
-            self._quest["p2"]     = (lm2[1], lm2[2])
-            self._quest["p1name"] = lm1[0]
-            self._quest["p2name"] = lm2[0]
-            self._quest["text"]   = "chart the treacherous waters between two pirate strongholds"
-            msg = (f"{names} have been chosen by the gods to "
-                   f"{self._quest['text']}. "
-                   f"First reach {lm1[0]}, then {lm2[0]}.")
-            await self.db.log_event("quest", msg)
-            return [broadcast_all(msg)]
-        return result
-
     def cmd_pause(self) -> str:
         self.paused = not self.paused
         return f"Game {'PAUSED — tick loop suspended.' if self.paused else 'RESUMED — tick loop running.'}"

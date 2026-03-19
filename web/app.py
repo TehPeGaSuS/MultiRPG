@@ -796,7 +796,7 @@ async def handle_api_quest(req):
             "text":      q["text"],
             "time_left": max(0, q["qtime"] - now),
             "questers":  [{"username": x["username"], "network": x["network"],
-                           "level": x["level"], "class": x["class"]}
+                           "level": x["level"], "char_class": x["class"]}
                           for x in q["questers"]],
         }
     else:
@@ -808,9 +808,11 @@ async def handle_api_quest(req):
             "stage":    q["stage"],
             "target":   target,
             "questers": [{"username": x["username"], "network": x["network"],
-                          "level": x["level"], "class": x["class"],
+                          "level": x["level"], "char_class": x["class"],
                           "x": x.get("pos_x", 0), "y": x.get("pos_y", 0)}
                          for x in q["questers"]],
+            "p1name": q.get("p1name", f"[{target[0]},{target[1]}]"),
+            "p2name": q.get("p2name", ""),
         }
     return web.Response(text=json.dumps(data), content_type="application/json")
 
@@ -896,7 +898,7 @@ function renderQuest(q) {
         <b>Time to Completion</b><span id="countdown">${fmtTime(_timeLeft)}</span>
       </div>`;
   } else {
-    const stageTarget = q.target;
+    const destName = q.stage === 1 ? q.p1name : q.p2name;
     metaHtml = `
       <div class="meta-item">
         <b>Type</b><span>${typeLabel}</span>
@@ -905,7 +907,7 @@ function renderQuest(q) {
         <b>Stage</b><span>${q.stage} of 2</span>
       </div>
       <div class="meta-item">
-        <b>Current Target</b><span>[${stageTarget[0]}, ${stageTarget[1]}]</span>
+        <b>Destination</b><span>${destName}</span>
       </div>`;
   }
 

@@ -306,7 +306,12 @@ class IRCBot:
             await reply(await self.engine.cmd_whoami(nick, self.network_name))
 
         elif cmd == "QUEST":
-            await reply(await self.engine.cmd_quest())
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            bcast = await self.engine.cmd_quest()
+            if bcast:
+                await self._deliver_local(bcast)
+            else:
+                await reply("Could not start quest.")
 
         elif cmd == "TOP":
             players = await self.engine.db.get_all_players()
@@ -333,7 +338,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG QUEST PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -400,14 +405,6 @@ class IRCBot:
             count = self._send_queue.qsize()
             self._send_queue = __import__('asyncio').Queue()
             await reply(f"Send queue cleared ({count} messages dropped).")
-
-        elif cmd == "QUEST":
-            if not await self._is_admin(nick): await reply("Access denied."); return
-            bcast = await self.engine.cmd_quest()
-            if bcast:
-                await self._deliver_local(bcast)
-            else:
-                await reply("Could not start quest.")
 
         else:
             await reply(f"Unknown command '{cmd}'. Send HELP for a list of commands.")
