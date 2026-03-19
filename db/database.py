@@ -62,6 +62,43 @@ class Database:
         async with self.conn.execute("SELECT * FROM players WHERE id=?", (pid,)) as c:
             return await c.fetchone()
 
+    # ── Game state & Hall of Fame ────────────────────────────────────────────────
+
+    async def get_round(self) -> int:
+        async with self.conn.execute("SELECT round FROM game_state WHERE id=1") as c:
+            row = await c.fetchone()
+        return row["round"] if row else 1
+
+    async def record_hof(self, round_num: int, rank: int, p: dict, item_sum: int):
+        await self.conn.execute(
+            "INSERT INTO hall_of_fame (round,rank,username,class,network,level,item_sum) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (round_num, rank, p["username"], p["class"],
+             p["network"], p["level"], item_sum))
+        await self.conn.commit()
+
+    async def get_hof(self) -> list:
+        async with self.conn.execute(
+            "SELECT * FROM hall_of_fame ORDER BY round DESC, rank ASC") as c:
+            return await c.fetchall()
+
+    async def reset_round(self):
+        """Reset all player stats for a new round. Preserve username, password,
+        network, is_admin. Wipe level, TTL, items, penalties, position."""
+        now = int(__import__('time').time())
+        await self.conn.execute("""
+            UPDATE players SET
+                level=0, ttl=600, next_ttl=600,
+                pos_x=0, pos_y=0, alignment='n',
+                pen_mesg=0, pen_nick=0, pen_part=0,
+                pen_kick=0, pen_quit=0, pen_quest=0, pen_logout=0,
+                idled=0, is_online=0, current_nick=NULL,
+                online_since=NULL, last_login=?
+            """, (now,))
+        await self.conn.execute("DELETE FROM items")
+        await self.conn.execute("UPDATE game_state SET round=round+1, reset_at=? WHERE id=1", (now,))
+        await self.conn.commit()
+
     # ── Quest persistence ─────────────────────────────────────────────────────
 
     async def save_quest(self, quest: dict):

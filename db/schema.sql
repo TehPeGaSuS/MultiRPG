@@ -81,3 +81,25 @@ CREATE TABLE IF NOT EXISTS quest (
 
 -- Ensure the singleton row always exists
 INSERT OR IGNORE INTO quest (id, active) VALUES (1, 0);
+
+CREATE TABLE IF NOT EXISTS game_state (
+    id          INTEGER PRIMARY KEY CHECK(id=1),  -- singleton
+    round       INTEGER NOT NULL DEFAULT 1,
+    reset_at    INTEGER                            -- timestamp of last reset
+);
+
+INSERT OR IGNORE INTO game_state (id, round) VALUES (1, 1);
+
+CREATE TABLE IF NOT EXISTS hall_of_fame (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    round       INTEGER NOT NULL,
+    rank        INTEGER NOT NULL,   -- 1, 2, 3
+    username    TEXT    NOT NULL,
+    class       TEXT    NOT NULL,
+    network     TEXT    NOT NULL,
+    level       INTEGER NOT NULL,
+    item_sum    INTEGER NOT NULL DEFAULT 0,
+    finished_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_hof_round ON hall_of_fame(round DESC);

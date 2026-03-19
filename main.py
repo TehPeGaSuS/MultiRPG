@@ -86,6 +86,10 @@ async def main():
     limit_pen  = int(game_cfg.get("limit_pen",  0))
     engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen)
     await engine.load_persisted_quest()
+    startup_msgs = await engine.check_win_condition()
+    if startup_msgs:
+        # Deliver after bots connect — store for delivery once manager is ready
+        engine._startup_broadcasts = startup_msgs
 
     manager = BotManager()
     for net in config.get("networks", []):
@@ -121,6 +125,10 @@ async def main():
     tasks = ([asyncio.create_task(bot.run(), name=f"irc-{bot.network_name}") for bot in manager.bots]
              + [asyncio.create_task(game_tick_loop(engine, manager, self_clock), name="game-tick")])
     log.info(f"Multi IdleRPG running on {len(manager.bots)} network(s), self_clock={self_clock}s")
+    if getattr(engine, '_startup_broadcasts', None):
+        await asyncio.sleep(5)  # give bots a moment to connect
+        await manager.deliver_all(engine._startup_broadcasts)
+        engine._startup_broadcasts = []
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

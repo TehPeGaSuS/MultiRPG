@@ -74,6 +74,7 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     app.router.add_get("/quest",       handle_quest)
     app.router.add_get("/player/{username}", handle_player)
     app.router.add_get("/play",        handle_play)
+    app.router.add_get("/hof",         handle_hof)
     app.router.add_get("/api/quest",   handle_api_quest)
     app.router.add_get("/api/players", handle_api_players)
     app.router.add_get("/api/events",  handle_api_events)
@@ -89,6 +90,7 @@ NAV = """<nav>
   <a href="/info">📖 Game Info</a>
   <a href="/quest">🧭 Quest</a>
   <a href="/play">🕹️ Where to Play</a>
+  <a href="/hof">🏆 Hall of Fame</a>
   <a href="/admin">🔑 Admin</a>
 </nav>"""
 
@@ -154,6 +156,7 @@ async def handle_api_events(req):
 
 async def handle_index(req):
     db = req.app["db"]
+    current_round = await db.get_round()
     players = await db.get_all_players()
     rows = ""
     for p in players:
@@ -302,7 +305,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
         <div class="legend-row"><span class="dot dot-off"></span> Offline player</div>
       </div>
     </div>
-    <div id="status-bar">Loading…</div>
+    <div id="status-bar">Round {current_round} — Loading…</div>
   </div>
 </div>
 <div id="tooltip"></div>
@@ -1175,4 +1178,72 @@ ctx.fillText(lbl,lx,ly);
 """
 
     return web.Response(text=page(f"{p['username']} — Profile", body, css),
+                        content_type="text/html")
+
+
+# ── Hall of Fame ──────────────────────────────────────────────────────────────
+
+async def handle_hof(req):
+    import datetime
+    db      = req.app["db"]
+    entries = await db.get_hof()
+    engine  = req.app.get("engine")
+    current_round = await db.get_round()
+
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    css = """
+.hof{max-width:820px;margin:2rem auto;padding:0 1.5rem 3rem}
+.round-block{margin-bottom:2rem}
+.round-title{font-family:'Cinzel',serif;color:var(--gold);font-size:0.9rem;
+              letter-spacing:0.1em;margin-bottom:0.6rem;padding-bottom:0.4rem;
+              border-bottom:1px solid var(--border)}
+.hof-card{background:var(--panel);border:1px solid var(--border);border-radius:5px;
+           overflow:hidden;margin-bottom:0.5rem;display:flex;align-items:center;gap:1rem;
+           padding:0.7rem 1.2rem}
+.medal{font-size:1.4rem;flex-shrink:0;width:2rem;text-align:center}
+.hof-name{font-family:'Cinzel',serif;color:var(--gold);font-size:0.95rem}
+.hof-detail{color:var(--muted);font-size:0.82rem;margin-top:0.2rem}
+.hof-meta{margin-left:auto;text-align:right;font-size:0.8rem;color:var(--muted)}
+.current-round{background:var(--panel);border:1px solid var(--border);border-radius:5px;
+                padding:1rem 1.2rem;margin-bottom:1.5rem;font-family:'Cinzel',serif;
+                color:var(--muted);font-size:0.85rem;letter-spacing:0.08em}
+.current-round span{color:var(--gold);font-size:1.1rem}
+.empty{color:var(--muted);font-style:italic;padding:2rem;text-align:center}
+"""
+
+    # Group by round
+    rounds = {}
+    for e in entries:
+        r = e["round"]
+        if r not in rounds:
+            rounds[r] = []
+        rounds[r].append(e)
+
+    body_parts = [f'<div class="hof">']
+    body_parts.append(
+        f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
+
+    if not rounds:
+        body_parts.append('<div class="empty">No completed rounds yet — be the first to reach level 40!</div>')
+    else:
+        for round_num in sorted(rounds.keys(), reverse=True):
+            winners = rounds[round_num]
+            body_parts.append(f'<div class="round-block">')
+            body_parts.append(f'<div class="round-title">⚔ Round {round_num}</div>')
+            for w in sorted(winners, key=lambda x: x["rank"]):
+                medal   = medals.get(w["rank"], "")
+                date    = datetime.datetime.utcfromtimestamp(
+                    w["finished_at"]).strftime("%d %b %Y")
+                body_parts.append(f'''<div class="hof-card">
+  <div class="medal">{medal}</div>
+  <div>
+    <div class="hof-name">{w['username']}</div>
+    <div class="hof-detail">{w['class']} · {w['network']} · Level {w['level']} · Item Sum {w['item_sum']}</div>
+  </div>
+  <div class="hof-meta">{date}</div>
+</div>''')
+            body_parts.append('</div>')
+
+    body_parts.append('</div>')
+    return web.Response(text=page("Hall of Fame", '\n'.join(body_parts), css),
                         content_type="text/html")

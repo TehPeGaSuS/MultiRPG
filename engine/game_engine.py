@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 MAP_X, MAP_Y         = 500, 500
 RP_BASE, RP_STEP     = 600, 1.16
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
+WIN_LEVEL            = 40     # level that ends a round
 
 
 def base_ttl(level: int) -> int:
@@ -170,7 +171,9 @@ class GameEngine:
         self.limit_pen  = limit_pen
         self._lasttime  = 0          # 0 = not joined yet
         self._rpreport  = 0
-        self.paused     = False      # PAUSE command stops tick processing
+        self.paused          = False  # PAUSE command stops tick processing
+        self._reset_pending  = False  # True during 60s end-of-round grace period
+        self._reset_at       = 0      # timestamp when reset fires
         self.silent     = 0          # 0=all, 1=no chan, 2=no pm, 3=no both
         self._quest = {
             "questers": [], "type": 1, "stage": 1,
@@ -186,6 +189,24 @@ class GameEngine:
             self._quest = q
             names = ", ".join(f"{x['username']}@{x['network']}" for x in q["questers"])
             log.info(f"Restored active quest: {q['text']!r} — questers: {names}")
+
+    async def check_win_condition(self) -> list:
+        """Called on startup — if any player is already at WIN_LEVEL, trigger reset."""
+        all_players = await self.db.get_all_players()
+        winners = [p for p in all_players if p["level"] >= WIN_LEVEL]
+        if winners and not self._reset_pending and not self._quest["questers"]:
+            self._reset_pending = True
+            self._reset_at      = int(time.time()) + 60
+            round_num           = await self.db.get_round()
+            top                 = max(winners, key=lambda p: p["level"])
+            log.warning(f"Startup: found level {top['level']} player — "
+                        f"triggering end of Round {round_num} in 60s")
+            return [broadcast_all(
+                f"⚠️ {top['username']}@{top['network']} reached level "
+                f"{WIN_LEVEL} — Round {round_num} ending in 60 seconds! "
+                f"Your characters will be reset. Keep idling to continue!"
+            )]
+        return []
 
     def mark_joined(self):
         self._lasttime = int(time.time())
@@ -484,6 +505,8 @@ class GameEngine:
             await self.db.add_penalty(p["id"], int(15 * (RP_PEN_STEP ** p["level"])), "pen_quest")
         await self.db.clear_quest()
         await self.db.commit()
+        # Check if reset was deferred waiting for quest to end
+        await self.check_win_condition()
         return [broadcast_all(
             f"{utag(player)}'s actions have brought the wrath of the gods "
             "upon the realm. Hell rains down upon you all."
@@ -496,6 +519,10 @@ class GameEngine:
             return []   # bot hasn't joined channel yet
         if self.paused:
             return []   # PAUSE mode active
+
+        # ── End-of-round reset ────────────────────────────────────────────────
+        if self._reset_pending and int(time.time()) >= self._reset_at:
+            return await self._do_round_reset()
 
         msgs    = []
         online  = await self.db.get_online_players()
@@ -520,10 +547,12 @@ class GameEngine:
             new_ttl = p["ttl"] - elapsed
             if new_ttl < 1:
                 levelled_ids.add(p["id"])
-                # Zero out TTL so next tick doesn't see stale value
                 await self.db.update_ttl(p["id"], 0)
             else:
                 await self.db.update_ttl(p["id"], new_ttl)
+            # Accumulate total idle time
+            await self.db.conn.execute(
+                "UPDATE players SET idled=idled+? WHERE id=?", (elapsed, p["id"]))
 
         # Commit TTL changes immediately so DB is never stale
         await self.db.commit()
@@ -578,6 +607,18 @@ class GameEngine:
         new_level = p["level"] + 1
         new_ttl   = base_ttl(new_level)
         await self.db.level_up(p["id"], new_level, new_ttl)
+
+        # ── End of round check ────────────────────────────────────────────────
+        if new_level >= WIN_LEVEL and not self._reset_pending and not self._quest["questers"]:
+            self._reset_pending = True
+            self._reset_at      = int(time.time()) + 60
+            round_num           = await self.db.get_round()
+            return [broadcast_all(
+                f"⚠️ {utag(p)} has reached level {WIN_LEVEL} "
+                f"and ended Round {round_num}! "
+                f"The realm will be reborn in 60 seconds. "
+                f"Prepare to re-register for Round {round_num + 1}!"
+            )]
 
         # Issue #5: Level-up message format
         msgs = [broadcast_all(
@@ -695,6 +736,7 @@ class GameEngine:
                     q["qtime"]    = int(time.time()) + 3600
                     await self.db.clear_quest()
                     await self.db.log_event("quest", msg)
+                    msgs.extend(await self.check_win_condition())
         return msgs
 
     # ── Quest ─────────────────────────────────────────────────────────────────
@@ -716,7 +758,9 @@ class GameEngine:
             q["qtime"]    = now + 21600
             await self.db.clear_quest()
             await self.db.log_event("quest", msg)
-            return [broadcast_all(msg)]
+            msgs = [broadcast_all(msg)]
+            msgs.extend(await self.check_win_condition())
+            return msgs
         return []
 
     async def _start_quest(self, online) -> list:
@@ -787,6 +831,54 @@ class GameEngine:
         return [broadcast_all(msg)]
 
     # ── Daily events ──────────────────────────────────────────────────────────
+
+    async def _do_round_reset(self) -> list:
+        """Record top 3 in HoF, announce winners, reset all players for new round."""
+        round_num   = await self.db.get_round()
+        all_players = await self.db.get_all_players()
+
+        # Score each player: (level, item_sum)
+        scored = []
+        for p in all_players:
+            isum = await self.db.get_item_sum(p["id"])
+            scored.append((p, isum))
+        scored.sort(key=lambda x: (x[0]["level"], x[1]), reverse=True)
+
+        # Record top 3 in HoF
+        medals = ["🥇", "🥈", "🥉"]  # 🥇🥈🥉
+        top3   = scored[:3]
+        for rank, (p, isum) in enumerate(top3, 1):
+            await self.db.record_hof(round_num, rank, dict(p), isum)
+
+        # Build winner announcement
+        winner_parts = []
+        for i, (p, isum) in enumerate(top3):
+            winner_parts.append(
+                f"{medals[i]} {p['username']}@{p['network']} "
+                f"(lv.{p['level']}, {p['class']}, items:{isum})"
+            )
+        winners_str = "  ".join(winner_parts)
+
+        # Clear quest
+        self._quest = {"questers": [], "type": 1, "stage": 1,
+                       "p1": None, "p2": None, "qtime": 0, "text": "",
+                       "p1name": "", "p2name": ""}
+        await self.db.clear_quest()
+
+        # Reset all players
+        await self.db.reset_round()
+
+        # Clear reset flag
+        self._reset_pending = False
+        self._reset_at      = 0
+
+        msg1 = (f"⚔️ End of Round {round_num}! "
+                f"{winners_str}  "
+                f"The realm has been reborn — Round {round_num + 1} begins now! "
+                f"Your characters have been reset. Keep idling to continue!")
+        await self.db.log_event("system", f"Round {round_num} ended. "
+                                f"Winner: {top3[0][0]['username'] if top3 else 'none'}")
+        return [broadcast_all(msg1)]
 
     async def _hand_of_god(self, online) -> list:
         if not online: return []
