@@ -62,13 +62,6 @@ class Database:
         async with self.conn.execute("SELECT * FROM players WHERE id=?", (pid,)) as c:
             return await c.fetchone()
 
-    async def get_player_by_userhost(self, userhost, network):
-        """Find an offline player whose stored userhost matches — for auto-login on JOIN."""
-        async with self.conn.execute(
-            "SELECT * FROM players WHERE userhost=? AND network=? AND is_online=0",
-            (userhost, network)) as c:
-            return await c.fetchone()
-
     async def get_player_by_nick(self, nick, network):
         async with self.conn.execute(
             "SELECT * FROM players WHERE current_nick=? AND network=?", (nick,network)

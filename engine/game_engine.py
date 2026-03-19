@@ -402,6 +402,52 @@ class GameEngine:
         await self.db.update_username(p["id"], new_name)
         return f"Username changed from {target} to {new_name}."
 
+    async def cmd_quest(self) -> list:
+        """Admin: force-start a quest immediately, ignoring timer and eligibility floor."""
+        if self._quest["questers"]:
+            return [broadcast_all("A quest is already in progress.")]
+        online = await self.db.get_online_players()
+        # Relax eligibility: any online player, any level
+        eligible = [p for p in online]
+        if len(eligible) < 4:
+            return [broadcast_all(
+                f"Not enough online players to start a quest (need 4, have {len(eligible)}).")]
+        result = await self._start_quest(online)
+        if not result:
+            # _start_quest still enforces lv40+ — override by forcing any 4
+            import random as _r
+            questers = _r.sample(eligible, min(4, len(eligible)))
+            self._quest["questers"] = questers
+            names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
+            import time as _t
+            now = int(_t.time())
+            LANDMARKS = [
+                ("Deadman's Cove",245,185),("The Pirate King's Keep",280,258),
+                ("Skull Island",430,120),("Port Royal",195,258),
+                ("Mermaid's Lagoon",320,258),("Blackbeard's Cove",330,195),
+                ("Smuggler's Run",305,325),("Gallows' Reach",335,338),
+                ("Shipwreck Reef",378,258),("Kraken Deep",80,385),
+                ("Smuggler's Roost",90,240),("Siren's Watch",155,315),
+                ("Cutthroat Cove",390,335),("Barnacle Bay",450,205),
+                ("Marauder's Bay",412,392),("Rum Runner's Isle",340,425),
+                ("Freeport",468,362),("Whaler's Notch",468,112),
+                ("Buccaneer's Point",440,322),("Tortuga Haven",210,195),
+            ]
+            lm1, lm2 = _r.sample(LANDMARKS, 2)
+            self._quest["type"]   = 2
+            self._quest["stage"]  = 1
+            self._quest["p1"]     = (lm1[1], lm1[2])
+            self._quest["p2"]     = (lm2[1], lm2[2])
+            self._quest["p1name"] = lm1[0]
+            self._quest["p2name"] = lm2[0]
+            self._quest["text"]   = "chart the treacherous waters between two pirate strongholds"
+            msg = (f"{names} have been chosen by the gods to "
+                   f"{self._quest['text']}. "
+                   f"First reach {lm1[0]}, then {lm2[0]}.")
+            await self.db.log_event("quest", msg)
+            return [broadcast_all(msg)]
+        return result
+
     def cmd_pause(self) -> str:
         self.paused = not self.paused
         return f"Game {'PAUSED — tick loop suspended.' if self.paused else 'RESUMED — tick loop running.'}"
@@ -670,44 +716,12 @@ class GameEngine:
         questers = random.sample(eligible, 4)
         self._quest["questers"] = questers
         names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
-        # Landmark coords for grid quests — matches 500x500 pirate map
-        LANDMARKS = [
-            ("Deadman's Cove",          245, 185),
-            ("The Pirate King's Keep",  280, 258),
-            ("Skull Island",            430, 120),
-            ("Port Royal",              195, 258),
-            ("Mermaid's Lagoon",        320, 258),
-            ("Blackbeard's Cove",       330, 195),
-            ("Smuggler's Run",          305, 325),
-            ("Gallows' Reach",          335, 338),
-            ("Shipwreck Reef",          378, 258),
-            ("Kraken Deep",              80, 385),
-            ("Smuggler's Roost",         90, 240),
-            ("Siren's Watch",           155, 315),
-            ("Cutthroat Cove",          390, 335),
-            ("Barnacle Bay",            450, 205),
-            ("Marauder's Bay",          412, 392),
-            ("Rum Runner's Isle",       340, 425),
-            ("Freeport",                468, 362),
-            ("Whaler's Notch",          468, 112),
-            ("Buccaneer's Point",       440, 322),
-            ("Tortuga Haven",           210, 195),
-        ]
         QUESTS = [
-            ("Q1", "sail through the Roaring Swell and survive the tempest unscathed"),
-            ("Q1", "retrieve the cursed treasure chest from Deadman's Cove before the tide turns"),
-            ("Q1", "escort the merchant fleet safely past Shipwreck Reef to Freeport"),
-            ("Q1", "break the sea witch's curse haunting the waters of Mermaid's Lagoon"),
-            ("Q1", "defend Port Royal from the incoming pirate armada until dawn"),
-            ("Q1", "recover the Pirate King's stolen crown from Blackbeard's Cove"),
-            ("Q1", "navigate the Serpent's Current and chart a safe passage for the fleet"),
-            ("Q1", "rescue the prisoners held captive at Gallows' Reach before high tide"),
-            ("Q1", "destroy the kraken's eggs hidden in the depths of Kraken Deep"),
-            ("Q1", "barter passage through Cutthroat Cove without firing a single shot"),
-            ("Q2", "brave the open seas to reach the lost ruins"),
-            ("Q2", "chart the treacherous waters between two pirate strongholds"),
-            ("Q2", "deliver the sealed orders across enemy-controlled waters"),
-            ("Q2", "follow the ancient map to uncover the buried treasure"),
+            ("Q1", "slay the dragon terrorising the realm"),
+            ("Q1", "retrieve the sacred chalice from the dark temple"),
+            ("Q1", "escort the princess safely across the mountains"),
+            ("Q2", "cleanse the Temple of the Shadow God"),
+            ("Q2", "recover the Lost Tome of Forbidden Knowledge"),
         ]
         qtype, text = random.choice(QUESTS)
         self._quest["text"] = text
@@ -720,15 +734,12 @@ class GameEngine:
         else:
             self._quest["type"]  = 2
             self._quest["stage"] = 1
-            lm1, lm2 = random.sample(LANDMARKS, 2)
-            p1 = (lm1[1], lm1[2])
-            p2 = (lm2[1], lm2[2])
-            self._quest["p1"]    = p1
-            self._quest["p2"]    = p2
-            self._quest["p1name"] = lm1[0]
-            self._quest["p2name"] = lm2[0]
+            p1 = (random.randint(0, MAP_X - 1), random.randint(0, MAP_Y - 1))
+            p2 = (random.randint(0, MAP_X - 1), random.randint(0, MAP_Y - 1))
+            self._quest["p1"] = p1
+            self._quest["p2"] = p2
             msg = (f"{names} have been chosen by the gods to {text}. "
-                   f"First reach {lm1[0]}, then {lm2[0]}.")
+                   f"First reach [{p1[0]},{p1[1]}], then [{p2[0]},{p2[1]}].")
         await self.db.log_event("quest", msg)
         return [broadcast_all(msg)]
 

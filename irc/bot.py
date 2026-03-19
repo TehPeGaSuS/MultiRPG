@@ -200,20 +200,6 @@ class IRCBot:
                 self.engine.mark_joined()
             return
 
-        # ── Auto-login by userhost when a user joins the channel ──────────────
-        # If their user@host matches a registered (offline) player, log them in
-        # silently so AFK reconnects don't break their idle streak.
-        if command == "JOIN" and usernick != self.current_nick:
-            uh = prefix if "!" in prefix else ""
-            if uh and "!" in uh:
-                p = await self.engine.db.get_player_by_userhost(uh, self.network_name)
-                if p:
-                    await self.engine.db.set_online(
-                        p["id"], usernick, self.channel, uh)
-                    log.info(
-                        f"[{self.network_name}] Auto-login: {usernick} ({uh}) → {p['username']}")
-            return
-
         # Ignore our own messages for all other commands
         if usernick == self.current_nick:
             return
@@ -335,7 +321,7 @@ class IRCBot:
 
         elif cmd == "HELP":
             for line in [
-                "IdleRPG commands (all via PM to the bot):",
+                "MultiRPG commands (all via PM to the bot):",
                 "  REGISTER <username> <password> <class>  — Create account",
                 "  LOGIN <username> <password>              — Log in",
                 "  LOGOUT                                   — Log out (penalty!)",
@@ -347,7 +333,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG QUEST PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -414,6 +400,14 @@ class IRCBot:
             count = self._send_queue.qsize()
             self._send_queue = __import__('asyncio').Queue()
             await reply(f"Send queue cleared ({count} messages dropped).")
+
+        elif cmd == "QUEST":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            bcast = await self.engine.cmd_quest()
+            if bcast:
+                await self._deliver_local(bcast)
+            else:
+                await reply("Could not start quest.")
 
         else:
             await reply(f"Unknown command '{cmd}'. Send HELP for a list of commands.")
