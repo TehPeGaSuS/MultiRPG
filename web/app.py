@@ -226,46 +226,37 @@ setInterval(refreshLeaderboard, 10000);
 # Original IdleRPG map region labels (from res0 & Jeb's basemap.png).
 # The basemap is 500x500. These coords place labels at the visual centre of
 # each region as they appear on the original basemap, reproduced faithfully.
-MAP_REGIONS = [
-    # Pirate World Map — coords match the 500x500 basemap
-    ["The Roaring Swell",        160, 175, "region"],
-    ["Serpent's Current",        340, 160, "region"],
-    ["Kraken Deep",               80, 385, "region"],
-    ["The Pirate Current",       410, 270, "region"],
-    ["Serpent's Reef",           360, 295, "region"],
-    ["Smuggler's Roost",          90, 240, "region"],
-    ["Siren's Watch",            155, 315, "region"],
-    ["Tortuga Haven",            210, 195, "region"],
-    ["Port Royal",               195, 258, "region"],
-    ["Deadman's Cove",           245, 185, "region"],
-    ["The Pirate King's Keep",   280, 258, "region"],
-    ["Mermaid's Lagoon",         320, 258, "region"],
-    ["Blackbeard's Cove",        330, 195, "region"],
-    ["Smuggler's Run",           305, 325, "region"],
-    ["Gallows' Reach",           335, 338, "region"],
-    ["Shipwreck Reef",           378, 258, "region"],
-    ["Cutthroat Cove",           390, 335, "region"],
-    ["Skull Island",             430, 120, "region"],
-    ["Barnacle Bay",             450, 205, "region"],
-    ["Whaler's Notch",           468, 112, "region"],
-    ["Buccaneer's Point",        440, 322, "region"],
-    ["Marauder's Bay",           412, 392, "region"],
-    ["Rum Runner's Isle",        340, 425, "region"],
-    ["Freeport",                 468, 362, "region"],
+# 4x4 invisible grid zones — each cell is 125x125px on the 500x500 world map
+# Geography-matched pirate names, pins nudged off-grid for organic feel
+GRID_ZONES = [
+    "The Roaring Swell",  "Deadman's Cove",    "Serpent's Current", "Whaler's Notch",
+    "Kraken Deep",        "Smuggler's Run",     "Mermaid's Lagoon",  "Freeport",
+    "Cutthroat Cove",     "The Howling Gale",   "Marauder's Bay",    "The Devil's Passage",
+    "The Abyssal Plain",  "The Frozen South",   "Antarctica's Edge", "The Endless Deep",
 ]
 
-# Lookup: find nearest named landmark to a coordinate
+# Pin positions — nudged off cell-center for organic feel (matches rendered map)
+GRID_PINS = [
+    ( 54,  72), (193,  70), (307,  74), (446,  68),
+    ( 72, 180), (180, 196), (320, 179), (428, 194),
+    ( 69, 302), (179, 320), (321, 306), (430, 321),
+    ( 70, 429), (181, 444), (319, 428), (428, 445),
+]
+
+MAP_REGIONS = [
+    [GRID_ZONES[i], GRID_PINS[i][0], GRID_PINS[i][1], "region"]
+    for i in range(16)
+]
+
 def nearest_landmark(x, y):
-    best, best_d = MAP_REGIONS[0][0], float('inf')
-    for name, rx, ry, _ in MAP_REGIONS:
-        d = ((rx - x) ** 2 + (ry - y) ** 2) ** 0.5
-        if d < best_d:
-            best_d = d
-            best = name
-    return best
+    col = min(int(x // 125), 3)
+    row = min(int(y // 125), 3)
+    return GRID_ZONES[row * 4 + col]
+
 
 async def handle_map(req):
-    regions_js = json.dumps(MAP_REGIONS)
+    regions_js    = json.dumps(MAP_REGIONS)
+    grid_zones_js = json.dumps(GRID_ZONES)
     css = """
 body{overflow:hidden;height:100vh;display:flex;flex-direction:column}
 header{flex-shrink:0}nav{flex-shrink:0}
@@ -323,6 +314,7 @@ let players = [];
 
 // ── Region data ─────────────────────────────────────────────────────────────
 const REGIONS = {regions_js};
+const GRID_ZONES = {grid_zones_js};
 
 // ── Load map image as background ──────────────────────────────────────────────
 const off = document.createElement('canvas'); off.width=W; off.height=H;
@@ -375,14 +367,12 @@ async function fetchPlayers() {{
   }} catch(e) {{ document.getElementById('status-bar').textContent = 'Connection error'; }}
 }}
 
-// ── Nearest region lookup ─────────────────────────────────────────────────────
+// ── Grid-based zone lookup — always returns a zone name ──────────────────────
+const CELL = 500 / 4;
 function regionAt(mx, my) {{
-  let best = null, bestD = 80;
-  for (const [name, x, y] of REGIONS) {{
-    const d = Math.hypot(x - mx, y - my);
-    if (d < bestD) {{ bestD = d; best = name; }}
-  }}
-  return best;
+  const col = Math.min(Math.floor(mx / CELL), 3);
+  const row = Math.min(Math.floor(my / CELL), 3);
+  return GRID_ZONES[row * 4 + col] || null;
 }}
 
 // ── Hover ─────────────────────────────────────────────────────────────────────

@@ -348,36 +348,29 @@ class GameEngine:
             return [broadcast_all(
                 f"Not enough online players to start a quest "
                 f"(need 4, have {len(online)}).")]
-        # Try normal start first (respects lv40+)
         result = await self._start_quest(online)
         if result:
             return result
-        # Fall back: use any 4 online players
         questers = random.sample(online, min(4, len(online)))
         self._quest["questers"] = questers
         names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
-        now = int(time.time())
         LANDMARKS = [
-            ("Deadman's Cove",          245, 185),
-            ("The Pirate King's Keep",  280, 258),
-            ("Skull Island",             430, 120),
-            ("Port Royal",               195, 258),
-            ("Mermaid's Lagoon",        320, 258),
-            ("Blackbeard's Cove",       330, 195),
-            ("Smuggler's Run",          305, 325),
-            ("Gallows' Reach",          335, 338),
-            ("Shipwreck Reef",           378, 258),
-            ("Kraken Deep",               80, 385),
-            ("Smuggler's Roost",         90, 240),
-            ("Siren's Watch",           155, 315),
-            ("Cutthroat Cove",           390, 335),
-            ("Barnacle Bay",             450, 205),
-            ("Marauder's Bay",          412, 392),
-            ("Rum Runner's Isle",       340, 425),
-            ("Freeport",                 468, 362),
-            ("Whaler's Notch",          468, 112),
-            ("Buccaneer's Point",       440, 322),
-            ("Tortuga Haven",            210, 195),
+            ("The Roaring Swell",   54,  72),
+            ("Deadman's Cove",     193,  70),
+            ("Serpent's Current",  307,  74),
+            ("Whaler's Notch",     446,  68),
+            ("Kraken Deep",         72, 180),
+            ("Smuggler's Run",     180, 196),
+            ("Mermaid's Lagoon",   320, 179),
+            ("Freeport",           428, 194),
+            ("Cutthroat Cove",      69, 302),
+            ("The Howling Gale",   179, 320),
+            ("Marauder's Bay",     321, 306),
+            ("The Devil's Passage",430, 321),
+            ("The Abyssal Plain",   70, 429),
+            ("The Frozen South",   181, 444),
+            ("Antarctica's Edge",  319, 428),
+            ("The Endless Deep",   428, 445),
         ]
         lm1, lm2 = random.sample(LANDMARKS, 2)
         self._quest["type"]   = 2
@@ -724,12 +717,39 @@ class GameEngine:
         questers = random.sample(eligible, 4)
         self._quest["questers"] = questers
         names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
+        LANDMARKS = [
+            ("The Roaring Swell",   54,  72),
+            ("Deadman's Cove",     193,  70),
+            ("Serpent's Current",  307,  74),
+            ("Whaler's Notch",     446,  68),
+            ("Kraken Deep",         72, 180),
+            ("Smuggler's Run",     180, 196),
+            ("Mermaid's Lagoon",   320, 179),
+            ("Freeport",           428, 194),
+            ("Cutthroat Cove",      69, 302),
+            ("The Howling Gale",   179, 320),
+            ("Marauder's Bay",     321, 306),
+            ("The Devil's Passage",430, 321),
+            ("The Abyssal Plain",   70, 429),
+            ("The Frozen South",   181, 444),
+            ("Antarctica's Edge",  319, 428),
+            ("The Endless Deep",   428, 445),
+        ]
         QUESTS = [
-            ("Q1", "slay the dragon terrorising the realm"),
-            ("Q1", "retrieve the sacred chalice from the dark temple"),
-            ("Q1", "escort the princess safely across the mountains"),
-            ("Q2", "cleanse the Temple of the Shadow God"),
-            ("Q2", "recover the Lost Tome of Forbidden Knowledge"),
+            ("Q1", "sail through the Roaring Swell and survive the tempest unscathed"),
+            ("Q1", "retrieve the cursed treasure chest from Deadman's Cove before the tide turns"),
+            ("Q1", "escort the merchant fleet safely past Shipwreck Reef to Freeport"),
+            ("Q1", "break the sea witch's curse haunting the waters of Mermaid's Lagoon"),
+            ("Q1", "defend Port Royal from the incoming pirate armada until dawn"),
+            ("Q1", "recover the Pirate King's stolen crown from Blackbeard's Cove"),
+            ("Q1", "navigate the Serpent's Current and chart a safe passage for the fleet"),
+            ("Q1", "rescue the prisoners held captive at Gallows Reef before high tide"),
+            ("Q1", "destroy the kraken's eggs hidden in the depths of Kraken Deep"),
+            ("Q1", "barter passage through Cutthroat Cove without firing a single shot"),
+            ("Q2", "brave the open seas to reach the lost ruins"),
+            ("Q2", "chart the treacherous waters between two pirate strongholds"),
+            ("Q2", "deliver the sealed orders across enemy-controlled waters"),
+            ("Q2", "follow the ancient map to uncover the buried treasure"),
         ]
         qtype, text = random.choice(QUESTS)
         self._quest["text"] = text
@@ -740,14 +760,15 @@ class GameEngine:
             msg = (f"{names} have been chosen by the gods to {text}. "
                    f"Quest ends in {fmt_time(dur)}.")
         else:
-            self._quest["type"]  = 2
-            self._quest["stage"] = 1
-            p1 = (random.randint(0, MAP_X - 1), random.randint(0, MAP_Y - 1))
-            p2 = (random.randint(0, MAP_X - 1), random.randint(0, MAP_Y - 1))
-            self._quest["p1"] = p1
-            self._quest["p2"] = p2
+            self._quest["type"]   = 2
+            self._quest["stage"]  = 1
+            lm1, lm2 = random.sample(LANDMARKS, 2)
+            self._quest["p1"]     = (lm1[1], lm1[2])
+            self._quest["p2"]     = (lm2[1], lm2[2])
+            self._quest["p1name"] = lm1[0]
+            self._quest["p2name"] = lm2[0]
             msg = (f"{names} have been chosen by the gods to {text}. "
-                   f"First reach [{p1[0]},{p1[1]}], then [{p2[0]},{p2[1]}].")
+                   f"First reach {lm1[0]}, then {lm2[0]}.")
         await self.db.log_event("quest", msg)
         return [broadcast_all(msg)]
 
@@ -761,14 +782,20 @@ class GameEngine:
         t       = int(pct * p["ttl"])
         if helping:
             await self.db.update_ttl(p["id"], max(0, p["ttl"] - t))
-            msg = (f"Verily I say unto thee, the Heavens have burst forth, and the "
-                   f"blessed hand of God carried {utag(p)} {fmt_time(t)} "
-                   f"toward level {p['level'] + 1}.")
+            HOG_HELP = [
+                f"The seas parted and a divine wind carried {utag(p)}'s vessel {fmt_time(t)} toward level {p['level'] + 1}.",
+                f"Neptune himself rose from the deep and blessed {utag(p)}, carrying them {fmt_time(t)} toward level {p['level'] + 1}.",
+                f"A legendary kraken cleared the path ahead for {utag(p)}, saving them {fmt_time(t)} toward level {p['level'] + 1}.",
+            ]
+            msg = random.choice(HOG_HELP)
         else:
             await self.db.add_penalty(p["id"], t)
-            msg = (f"Thereupon He stretched out His little finger among them and "
-                   f"consumed {utag(p)} with fire, slowing the heathen "
-                   f"{fmt_time(t)} from level {p['level'] + 1}.")
+            HOG_HURT = [
+                f"The Hand of Davy Jones reached up and dragged {utag(p)} down, slowing them {fmt_time(t)} from level {p['level'] + 1}.",
+                f"A furious storm conjured by the sea gods battered {utag(p)}'s ship, costing them {fmt_time(t)} from level {p['level'] + 1}.",
+                f"The Kraken rose from Kraken Deep and smashed {utag(p)}'s hull, slowing them {fmt_time(t)} from level {p['level'] + 1}.",
+            ]
+            msg = random.choice(HOG_HURT)
         fp   = await self.db.get_player_by_id(p["id"])
         msgs = [broadcast_all(msg)]
         if fp:
@@ -781,12 +808,12 @@ class GameEngine:
         if not online: return []
         p  = random.choice(online)
         IE = {
-            "amulet":          f"{utag(p)} fell, chipping their amulet",
-            "charm":           f"{utag(p)} dropped their charm in a bog",
-            "weapon":          f"{utag(p)} left their weapon out in the rain",
-            "tunic":           f"{utag(p)} spilled a shrinking potion on their tunic",
-            "shield":          f"{utag(p)}'s shield was scorched by dragon fire",
-            "set of leggings": f"{utag(p)} burned a hole in their leggings while ironing",
+            "amulet":          f"{utag(p)}'s amulet was lost overboard in a storm",
+            "charm":           f"{utag(p)}'s charm was stolen by a port pickpocket",
+            "weapon":          f"{utag(p)} left their weapon to rust in the bilge",
+            "tunic":           f"{utag(p)}'s tunic was shredded by the Kraken's tentacle",
+            "shield":          f"{utag(p)}'s shield was crushed under a falling mast",
+            "set of leggings": f"{utag(p)}'s leggings were eaten by ship rats",
         }
         if random.random() < 0.1:
             slot = random.choice(list(IE.keys()))
@@ -798,10 +825,14 @@ class GameEngine:
         t   = int(pct * p["ttl"])
         await self.db.add_penalty(p["id"], t)
         TEXTS = [
-            f"{utag(p)} tripped over their own feet",
-            f"{utag(p)} was startled by a loud noise",
-            f"{utag(p)} drank a potion of Extreme Clumsiness by mistake",
-            f"{utag(p)} got lost in the Enchanted Woods",
+            f"{utag(p)} was press-ganged into swabbing the poop deck",
+            f"{utag(p)} fell into the hold chasing a runaway barrel",
+            f"{utag(p)} got tangled in the rigging during a squall",
+            f"{utag(p)} was marooned briefly on a sandbar",
+            f"{utag(p)} drank a jug of bad rum and saw sea monsters",
+            f"{utag(p)} was chased across three ports by an angry harbourmaster",
+            f"{utag(p)} lost their sea charts in a tavern brawl",
+            f"{utag(p)} sailed into the Howling Gale without a compass",
         ]
         fp   = await self.db.get_player_by_id(p["id"])
         msg  = (f"{random.choice(TEXTS)}. This calamity slowed them "
@@ -817,12 +848,12 @@ class GameEngine:
         if not online: return []
         p  = random.choice(online)
         IE = {
-            "amulet":          f"{utag(p)}'s amulet was blessed by a cleric",
-            "charm":           f"{utag(p)}'s charm absorbed a bolt of lightning",
-            "weapon":          f"{utag(p)} sharpened their weapon",
-            "tunic":           f"A magician cast Rigidity on {utag(p)}'s tunic",
-            "shield":          f"{utag(p)} reinforced their shield with dragon scales",
-            "set of leggings": f"A wizard imbued {utag(p)}'s leggings with Fortitude",
+            "amulet":          f"{utag(p)}'s amulet was blessed by a sea witch",
+            "charm":           f"{utag(p)}'s charm glowed after surviving the Howling Gale",
+            "weapon":          f"{utag(p)} had their weapon reforged by a Freeport blacksmith",
+            "tunic":           f"A mermaid wove enchanted silk into {utag(p)}'s tunic",
+            "shield":          f"{utag(p)}'s shield was reinforced with kraken bone",
+            "set of leggings": f"{utag(p)}'s leggings were stitched with enchanted sailcloth",
         }
         if random.random() < 0.1:
             slot = random.choice(list(IE.keys()))
@@ -834,10 +865,14 @@ class GameEngine:
         t   = int(pct * p["ttl"])
         await self.db.update_ttl(p["id"], max(0, p["ttl"] - t))
         TEXTS = [
-            f"{utag(p)} found a four-leaf clover",
-            f"{utag(p)} received a blessing from a wandering priest",
-            f"{utag(p)} stumbled upon an enchanted spring",
-            f"{utag(p)} was touched by an angel",
+            f"{utag(p)} discovered a chest of gold doubloons washed ashore",
+            f"{utag(p)} caught a legendary wind and made record time",
+            f"{utag(p)} was blessed by the ghost of a friendly buccaneer",
+            f"{utag(p)} found a mermaid's pearl that grants swift passage",
+            f"{utag(p)} rode a pod of dolphins through Mermaid's Lagoon",
+            f"{utag(p)} deciphered an ancient sea chart leading to a shortcut",
+            f"{utag(p)} was hailed as a hero at Port Royal and feasted royally",
+            f"{utag(p)} survived the Kraken's gaze and emerged stronger",
         ]
         fp   = await self.db.get_player_by_id(p["id"])
         msg  = (f"{random.choice(TEXTS)}! This godsend accelerated them "
@@ -854,8 +889,9 @@ class GameEngine:
         if len(good) < 2: return []
         players = random.sample(good, 2)
         gain    = 5 + random.randint(0, 7)
-        msg     = (f"{utag(players[0])} and {utag(players[1])} have "
-                   f"prayed together. {gain}% of their time is removed.")
+        msg     = (f"{utag(players[0])} and {utag(players[1])} sailed together "
+                   f"under a blessed flag and the sea gods smiled upon them. "
+                   f"{gain}% of their time is removed.")
         msgs = [broadcast_all(msg)]
         for p in players:
             new_ttl = int(p["ttl"] * (1 - gain / 100))
@@ -883,7 +919,7 @@ class GameEngine:
             return []
         t = int(me["ttl"] * (1 + random.randint(0, 4)) / 100)
         await self.db.add_penalty(me["id"], t)
-        msg  = f"{utag(me)} is forsaken by their evil god. {fmt_time(t)} added to their clock."
+        msg  = f"{utag(me)} is forsaken by their dark patron and cast adrift. {fmt_time(t)} added to their clock."
         fp   = await self.db.get_player_by_id(me["id"])
         msgs = [broadcast_all(msg)]
         if fp:
