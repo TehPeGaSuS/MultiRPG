@@ -350,7 +350,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG QUEST RELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -411,6 +411,10 @@ class IRCBot:
                 await reply("Usage: SILENT <0|1|2|3>  (0=all on, 1=no chan, 2=no pm, 3=all off)")
                 return
             await reply(self.engine.cmd_silentmode(int(args[0])))
+
+        elif cmd == "RELOGIN":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            await reply(self.engine.cmd_relogin())
 
         elif cmd == "CLEARQ":
             if not await self._is_admin(nick): await reply("Access denied."); return

@@ -175,6 +175,7 @@ class GameEngine:
         self._reset_pending  = False  # True during 60s end-of-round grace period
         self._reset_at       = 0      # timestamp when reset fires
         self._post_reset_who = False  # signal bots to re-WHO after round reset
+        self._relogin_who    = False  # signal bots to re-WHO on admin RELOGIN command
         self.silent     = 0          # 0=all, 1=no chan, 2=no pm, 3=no both
         self._quest = {
             "questers": [], "type": 1, "stage": 1,
@@ -368,6 +369,11 @@ class GameEngine:
         return (f"{names} are questing to {q['text']}. "
                 f"Must reach [{q['p1'][0]},{q['p1'][1]}] then "
                 f"[{q['p2'][0]},{q['p2'][1]}]. Heading to [{t[0]},{t[1]}].")
+
+    def cmd_relogin(self) -> str:
+        """Admin: signal all bots to re-WHO their channels and restore online status."""
+        self._relogin_who = True
+        return "Re-login WHO sent to all networks."
 
     async def cmd_forcequest(self) -> list:
         """Admin: force-start a quest immediately, ignoring timer and eligibility."""
