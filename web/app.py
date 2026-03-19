@@ -260,6 +260,7 @@ def nearest_landmark(x, y):
 async def handle_map(req):
     regions_js    = json.dumps(MAP_REGIONS)
     grid_zones_js = json.dumps(GRID_ZONES)
+    current_round = await req.app["db"].get_round()
     css = """
 body{overflow:hidden;height:100vh;display:flex;flex-direction:column}
 header{flex-shrink:0}nav{flex-shrink:0}

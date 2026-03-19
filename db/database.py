@@ -65,9 +65,12 @@ class Database:
     # ── Game state & Hall of Fame ────────────────────────────────────────────────
 
     async def get_round(self) -> int:
-        async with self.conn.execute("SELECT round FROM game_state WHERE id=1") as c:
-            row = await c.fetchone()
-        return row["round"] if row else 1
+        try:
+            async with self.conn.execute("SELECT round FROM game_state WHERE id=1") as c:
+                row = await c.fetchone()
+            return row["round"] if row else 1
+        except Exception:
+            return 1  # table doesn't exist yet — schema not applied
 
     async def record_hof(self, round_num: int, rank: int, p: dict, item_sum: int):
         await self.conn.execute(
