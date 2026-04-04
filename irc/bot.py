@@ -318,6 +318,9 @@ class IRCBot:
             await reply(await self.engine.cmd_whoami(nick, self.network_name))
 
         elif cmd == "QUEST":
+            await reply(await self.engine.cmd_quest(nick, self.network_name))
+
+        elif cmd == "FORCEQUEST":
             if not await self._is_admin(nick): await reply("Access denied."); return
             bcast = await self.engine.cmd_forcequest()
             if bcast:
@@ -350,7 +353,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG QUEST RELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG FORCEQUEST RELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────

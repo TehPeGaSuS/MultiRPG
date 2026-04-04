@@ -1,4 +1,4 @@
-[![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml) [![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml) [![CodeQL Advanced](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml)
+[![Python application](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/python-app.yml)  [![Pylint](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/pylint.yml)  [![CodeQL Advanced](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml/badge.svg)](https://github.com/TehPeGaSuS/MultiRPG/actions/workflows/codeql.yml)
 
 ---
 
@@ -19,7 +19,7 @@ A faithful Python reimplementation of [IdleRPG](http://idlerpg.net/) v3.0, exten
 
 ### First run
 
-Recent Ubuntu releases (22.04+) will refuse `pip install` at the system level with an "externally managed environment" error. Use a virtual environment instead:
+Recent Ubuntu releases (22.04+) will refuse `pip install` at the system level. Use a virtual environment:
 
 ```bash
 python3 -m venv venv
@@ -28,13 +28,13 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-This generates a `config.toml` in the current directory. Stop the bot, edit the file to add your IRC networks, then run again:
+This generates a `config.toml`. Stop the bot, edit it to add your IRC networks, then run again:
 
 ```bash
 python3 main.py
 ```
 
-> **Note:** You need to `source venv/bin/activate` in every new shell session before running the bot, or use the full path to the venv Python directly (see systemd example below).
+> **Note:** You need to `source venv/bin/activate` in every new shell session, or use the full venv path in systemd (see below).
 
 ### Configuration
 
@@ -44,29 +44,23 @@ self_clock = 5
 limit_pen  = 0
 
 [web]
-host = "0.0.0.0"
-port = 8080
+host         = "0.0.0.0"
+port         = 8080
+rate_limit   = 60   # max requests per IP per window
+rate_window  = 60   # window size in seconds
 
 [[networks]]
-name       = "SwiftIRC"
-host       = "irc.swiftirc.net"
+name       = "PTirc"
+host       = "irc.ptirc.org"
 port       = 6697
 channel    = "#multirpg"
 nick       = "MultiRPG"
 use_ssl    = true
 # nickserv_pass = "yourpass"
 # server_pass   = "yourpass"
-
-[[networks]]
-name       = "Libera"
-host       = "irc.libera.chat"
-port       = 6697
-channel    = "#multirpg"
-nick       = "MultiRPG"
-use_ssl    = true
 ```
 
-Add as many `[[networks]]` blocks as you like. All networks share the same game world and player database.
+Add as many `[[networks]]` blocks as you like. All networks share the same game world and database.
 
 ### Keeping it running
 
@@ -74,10 +68,10 @@ With **screen**:
 ```bash
 source venv/bin/activate
 screen -S multirpg python3 main.py
-# detach with Ctrl+A, D — reattach with: screen -r multirpg
+# detach: Ctrl+A, D — reattach: screen -r multirpg
 ```
 
-With **systemd** (`/etc/systemd/system/multirpg.service`) — note the venv Python path:
+With **systemd** (`/etc/systemd/system/multirpg.service`):
 ```ini
 [Unit]
 Description=Multi IdleRPG Bot
@@ -94,17 +88,20 @@ WantedBy=multi-user.target
 ```
 ```bash
 systemctl enable --now multirpg
-journalctl -u multirpg -f   # follow logs
+journalctl -u multirpg -f
 ```
 
 ### Database
 
-The bot creates `multirpg.db` (SQLite) on first run. Back it up with:
+The bot creates `multirpg.db` (SQLite) on first run. To apply schema updates to an existing database without wiping it:
+```bash
+sqlite3 multirpg.db < db/schema.sql
+```
+
+Back it up with:
 ```bash
 cp multirpg.db multirpg.db.bak
-```
-Or add a cron job:
-```bash
+# or via cron:
 0 * * * * cp /path/to/multirpg.db /path/to/backups/multirpg-$(date +\%H).db
 ```
 
@@ -114,10 +111,11 @@ Or add a cron job:
 
 | URL | Description |
 |---|---|
-| `/` | Leaderboard — auto-refreshes every 10s |
-| `/map` | Live world map — terrain, region names, player positions |
+| `/` | Leaderboard — live, auto-refreshes every 10s |
+| `/map` | World map — player positions on a vintage map |
 | `/info` | Game info and mechanics |
 | `/quest` | Active quest status |
+| `/hof` | Hall of Fame — all-time round winners |
 | `/play` | Where to play — IRC networks and channels |
 | `/admin` | Admin command reference |
 
@@ -161,13 +159,38 @@ All commands are sent via **private message** to the bot. Talking in the channel
 
 ---
 
+## Game Mechanics
+
+### Rounds & Hall of Fame
+
+The game runs in rounds. The first player to reach **level 40** ends the round. The top 3 players by level (item sum as tiebreaker) are recorded in the Hall of Fame. All player stats reset automatically — usernames, passwords, and admin flags are preserved. Players already in the channel are re-logged in automatically.
+
+### Quests
+
+Four level 40+ players who have been online for at least 2 hours are chosen for a quest. There are two types:
+
+- **Time-based** — lasts 12-24 hours. All questers must stay penalty-free until the timer expires.
+- **Grid-based** — questers must walk to two landmark coordinates on the map. No fixed duration.
+
+If any quester receives a penalty during a quest, the quest fails and everyone is penalised.
+
+### Daily Events
+
+- **Hand of God** — random player carried toward or away from next level (5-75% of TTL)
+- **Calamities** — bad luck slows a player 5-12% or degrades an item by 10%
+- **Godsends** — good luck accelerates a player 5-12% or upgrades an item by 10%
+- **Goodness** — two good-aligned players pray together, removing 5-12% of their TTL
+- **Evilness** — evil-aligned player steals an item or is forsaken by their dark patron
+
+---
+
 ## Admin Commands
 
 See [ADMIN.md](ADMIN.md) for the full reference. Quick list:
 
-`HOG` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>`
+`HOG` `FORCEQUEST` `RELOGIN` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>`
 
-To make yourself admin, first register a character, then run directly against the database:
+To make yourself admin, first register a character, then:
 ```bash
 sqlite3 multirpg.db "UPDATE players SET is_admin=1 WHERE username='YourName';"
 ```
@@ -176,5 +199,5 @@ sqlite3 multirpg.db "UPDATE players SET is_admin=1 WHERE username='YourName';"
 
 ## Credits
 
-Game design by **jotun**. Original map by **res0** and **Jeb**.  
+Game design by **jotun**. Original map by **res0** and **Jeb**.
 Python implementation built from scratch, honouring the original v3.0 logic.
