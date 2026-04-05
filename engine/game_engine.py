@@ -420,17 +420,12 @@ class GameEngine:
         self._quest["p1name"] = lm1[0]
         self._quest["p2name"] = lm2[0]
         self._quest["text"]   = "chart the treacherous waters between two pirate strongholds"
-        names_coords = ", ".join(
-            f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
-            for q in questers)
-        msg1 = f"{names_coords} have been chosen by the gods."
-        msg2 = (f"Their quest: {self._quest['text']}. "
-                f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
-                f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
-        msg = f"{msg1} {msg2}"
+        msg = (f"{names} have been chosen by the gods to "
+               f"{self._quest['text']}. "
+               f"First reach {lm1[0]}, then {lm2[0]}.")
         await self.db.log_event("quest", msg)
         await self.db.save_quest(self._quest)
-        return [broadcast_all(msg1), broadcast_all(msg2)]
+        return [broadcast_all(msg)]
 
     async def cmd_newpass(self, nick, network, pw) -> str:
         p = await self.db.get_player_by_nick(nick, network)
@@ -539,19 +534,6 @@ class GameEngine:
         # ── End-of-round reset ────────────────────────────────────────────────
         if self._reset_pending and int(time.time()) >= self._reset_at:
             return await self._do_round_reset()
-
-        # ── Scheduled quarterly round end (Jan 1, Apr 1, Jul 1, Oct 1) ───────
-        if not self._reset_pending:
-            import datetime as _dt
-            now_dt = _dt.datetime.utcnow()
-            if now_dt.day == 1 and now_dt.hour == 0 and now_dt.minute < 1                     and now_dt.month in (1, 4, 7, 10)                     and not self._quest["questers"]:
-                self._reset_pending = True
-                self._reset_at      = int(time.time()) + 60
-                round_num           = await self.db.get_round()
-                return [broadcast_all(
-                    f"⏰ Scheduled end of Round {round_num}! "
-                    f"The realm will be reborn in 60 seconds for a new quarter."
-                )]
 
         msgs    = []
         online  = await self.db.get_online_players()
@@ -702,7 +684,6 @@ class GameEngine:
 
         # Build state once OUTSIDE the loop — updates carry forward each step
         player_state = {p["id"]: dict(p) for p in online}
-
         # Track which pairs have already battled this tick (across all movement steps)
         battled_pairs = set()
 
@@ -846,12 +827,8 @@ class GameEngine:
             self._quest["type"]  = 1
             dur = random.randint(43200, 86400)
             self._quest["qtime"] = now + dur
-            names_coords = ", ".join(
-                f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
-                for q in questers)
-            msg1 = f"{names_coords} have been chosen by the gods."
-            msg2 = f"Their quest: {text}. Quest ends in {fmt_time(dur)}."
-            msg  = f"{msg1} {msg2}"
+            msg = (f"{names} have been chosen by the gods to {text}. "
+                   f"Quest ends in {fmt_time(dur)}.")
         else:
             self._quest["type"]   = 2
             self._quest["stage"]  = 1
@@ -864,17 +841,11 @@ class GameEngine:
             self._quest["p2"]     = (lm2[1], lm2[2])
             self._quest["p1name"] = lm1[0]
             self._quest["p2name"] = lm2[0]
-            names_coords = ", ".join(
-                f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
-                for q in questers)
-            msg1 = f"{names_coords} have been chosen by the gods."
-            msg2 = (f"Their quest: {text}. "
-                    f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
-                    f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
-            msg  = f"{msg1} {msg2}"
+            msg = (f"{names} have been chosen by the gods to {text}. "
+                   f"First reach {lm1[0]}, then {lm2[0]}.")
         await self.db.log_event("quest", msg)
         await self.db.save_quest(self._quest)
-        return [broadcast_all(msg1), broadcast_all(msg2)]
+        return [broadcast_all(msg)]
 
     # ── Daily events ──────────────────────────────────────────────────────────
 

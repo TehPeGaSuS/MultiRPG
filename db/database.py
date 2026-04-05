@@ -99,14 +99,6 @@ class Database:
                 online_since=NULL, last_login=?
             """, (now,))
         await self.conn.execute("DELETE FROM items")
-        # Re-initialise item rows at level 0 for all players
-        async with self.conn.execute("SELECT id FROM players") as c:
-            pids = [r["id"] for r in await c.fetchall()]
-        for pid in pids:
-            for slot in ITEM_SLOTS:
-                await self.conn.execute(
-                    "INSERT OR IGNORE INTO items(player_id,slot,level) VALUES(?,?,0)",
-                    (pid, slot))
         await self.conn.execute("UPDATE game_state SET round=round+1, reset_at=? WHERE id=1", (now,))
         await self.conn.commit()
 
