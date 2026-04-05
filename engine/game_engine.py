@@ -702,9 +702,10 @@ class GameEngine:
 
         # Build state once OUTSIDE the loop — updates carry forward each step
         player_state = {p["id"]: dict(p) for p in online}
+        # positions is shared across all steps so a pair can only collide once per tick
+        positions = {}
 
         for _ in range(self.self_clock):
-            positions = {}
 
             for p in online:
                 pid = p["id"]
