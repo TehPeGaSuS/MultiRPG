@@ -266,6 +266,14 @@ class IRCBot:
 
         async def reply(msg): await self.privmsg_nick(nick, msg)
 
+        try:
+            await self._dispatch_pm(nick, cmd, args, reply, userhost)
+        except Exception as e:
+            log.error(f"[{self.network_name}] PM command error ({cmd}): {e}", exc_info=True)
+            await reply(f"An error occurred processing your command.")
+
+    async def _dispatch_pm(self, nick, cmd, args, reply, userhost=""):
+
         # ── Account ───────────────────────────────────────────────────────────
 
         if cmd == "REGISTER":
@@ -318,7 +326,7 @@ class IRCBot:
             await reply(await self.engine.cmd_whoami(nick, self.network_name))
 
         elif cmd == "QUEST":
-            await reply(await self.engine.cmd_quest(nick, self.network_name))
+            await reply(await self.engine.cmd_quest())
 
         elif cmd == "FORCEQUEST":
             if not await self._is_admin(nick): await reply("Access denied."); return

@@ -535,6 +535,19 @@ class GameEngine:
         if self._reset_pending and int(time.time()) >= self._reset_at:
             return await self._do_round_reset()
 
+        # ── Scheduled quarterly round end (Jan 1, Apr 1, Jul 1, Oct 1) ───────
+        if not self._reset_pending:
+            import datetime as _dt
+            now_dt = _dt.datetime.utcnow()
+            if now_dt.day == 1 and now_dt.hour == 0 and now_dt.minute < 1                     and now_dt.month in (1, 4, 7, 10)                     and not self._quest["questers"]:
+                self._reset_pending = True
+                self._reset_at      = int(time.time()) + 60
+                round_num           = await self.db.get_round()
+                return [broadcast_all(
+                    f"⏰ Scheduled end of Round {round_num}! "
+                    f"The realm will be reborn in 60 seconds for a new quarter."
+                )]
+
         msgs    = []
         online  = await self.db.get_online_players()
         if not online:
