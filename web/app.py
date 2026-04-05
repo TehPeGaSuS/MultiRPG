@@ -501,7 +501,7 @@ All users start as neutral.</p>
 <h2>Levelling</h2>
 <p>To gain levels, you must only be logged in and idle. The time between levels is based on
 your character level, calculated by the formula:</p>
-<pre>600 × (1.16 ^ YOUR_LEVEL)  seconds</pre>
+<pre>600 × (1.21 ^ YOUR_LEVEL)  seconds</pre>
 <p>Very high levels (above 60) are calculated differently:</p>
 <pre>(time to level at 60) + (86400 × (level − 60))  seconds</pre>
 
