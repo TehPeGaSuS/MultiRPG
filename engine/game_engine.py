@@ -54,36 +54,36 @@ def fmt_time(seconds: int) -> str:
 
 # ── Items ─────────────────────────────────────────────────────────────────────
 ITEM_SLOT_NAMES = [
-    "ring", "amulet", "charm", "weapon", "helm",
-    "tunic", "pair of gloves", "shield", "set of leggings", "pair of boots",
+    "trinket", "amulet", "idol", "cutlass", "tricorn",
+    "coat", "gauntlets", "buckler", "breeches", "sea boots",
 ]
 UNIQUE_ITEMS = [
-    ("Mattt's Omniscience Grand Crown",       "helm",           50,  74, 25),
-    ("Juliet's Glorious Ring of Sparkliness", "ring",           50,  74, 25),
-    ("Res0's Protectorate Plate Mail",        "tunic",          75,  99, 30),
-    ("Dwyn's Storm Magic Amulet",             "amulet",        100, 124, 35),
-    ("Jotun's Fury Colossal Sword",           "weapon",        150, 174, 40),
-    ("Drdink's Cane of Blind Rage",           "weapon",        175, 200, 45),
-    ("Mrquick's Magical Boots of Swiftness",  "pair of boots", 250, 300, 48),
-    ("Jeff's Cluehammer of Doom",             "weapon",        300, 350, 52),
+    ("The Admiral's Grand Tricorn",            "tricorn",        50,  74, 25),
+    ("Davy Jones' Cursed Trinket",             "trinket",        50,  74, 25),
+    ("The Kraken Hunter's Coat",               "coat",           75,  99, 30),
+    ("The Sea Witch's Amulet",                 "amulet",        100, 124, 35),
+    ("Blackbeard's Fury Cutlass",              "cutlass",       150, 174, 40),
+    ("The Dead Man's Cutlass of Ruin",         "cutlass",       175, 200, 45),
+    ("Navigator's Enchanted Sea Boots",        "sea boots",     250, 300, 48),
+    ("The Cannon of Doom",                      "cutlass",       300, 350, 52),
 ]
 UNIQUE_MSGS = {
-    "Mattt's Omniscience Grand Crown":
-        "The light of the gods shines down! You found the level {lvl} Mattt's Omniscience Grand Crown! Your enemies fall before you as you anticipate their every move.",
-    "Juliet's Glorious Ring of Sparkliness":
-        "The light of the gods shines down! You found the level {lvl} Juliet's Glorious Ring of Sparkliness! Your enemies are blinded by its glory and their greed.",
-    "Res0's Protectorate Plate Mail":
-        "The light of the gods shines down! You found the level {lvl} Res0's Protectorate Plate Mail! Your enemies cower as their attacks have no effect.",
-    "Dwyn's Storm Magic Amulet":
-        "The light of the gods shines down! You found the level {lvl} Dwyn's Storm Magic Amulet! Your enemies are swept away by elemental fury.",
-    "Jotun's Fury Colossal Sword":
-        "The light of the gods shines down! You found the level {lvl} Jotun's Fury Colossal Sword! Your enemies are crushed by the blow.",
-    "Drdink's Cane of Blind Rage":
-        "The light of the gods shines down! You found the level {lvl} Drdink's Cane of Blind Rage! You blindly swing, hitting stuff.",
-    "Mrquick's Magical Boots of Swiftness":
-        "The light of the gods shines down! You found the level {lvl} Mrquick's Magical Boots of Swiftness! Your enemies choke on your dust.",
-    "Jeff's Cluehammer of Doom":
-        "The light of the gods shines down! You found the level {lvl} Jeff's Cluehammer of Doom! Your enemies gain sudden clarity... as you relieve them of it.",
+    "The Admiral's Grand Tricorn":
+        "The seas part and fortune smiles upon you! You found the level {lvl} Admiral's Grand Tricorn! Your enemies flee at the sight of your authority.",
+    "Davy Jones' Cursed Trinket":
+        "Something glints in the deep! You found the level {lvl} Davy Jones' Cursed Trinket! The curse of the deep binds your enemies in fear.",
+    "The Kraken Hunter's Coat":
+        "A coat stitched from kraken hide washes ashore! You found the level {lvl} Kraken Hunter's Coat! Your enemies' blades glance off harmlessly.",
+    "The Sea Witch's Amulet":
+        "A glowing amulet drifts up from the depths! You found the level {lvl} Sea Witch's Amulet! Your enemies are swept away by the tides of magic.",
+    "Blackbeard's Fury Cutlass":
+        "A fury-forged blade materialises in your grip! You found the level {lvl} Blackbeard's Fury Cutlass! Your enemies are cut down where they stand.",
+    "The Dead Man's Cutlass of Ruin":
+        "A spectral blade rises from the deep! You found the level {lvl} Dead Man's Cutlass of Ruin! You swing wildly, hitting everything in sight.",
+    "Navigator's Enchanted Sea Boots":
+        "Enchanted boots lace themselves onto your feet! You found the level {lvl} Navigator's Enchanted Sea Boots! Your enemies choke on your wake.",
+    "The Cannon of Doom":
+        "An impossibly large cannon washes up beside you! You found the level {lvl} Cannon of Doom! Your enemies scatter as you light the fuse.",
 }
 
 def roll_item(player_level: int) -> tuple:
@@ -170,6 +170,8 @@ class GameEngine:
         self.db         = db
         self.self_clock = self_clock
         self.limit_pen  = limit_pen
+        self.rp_base    = RP_BASE
+        self.rp_step    = RP_STEP
         self.hof_type   = hof_type    # "level", "cron", or "none"
         self.win_level  = win_level   # used when hof_type="level"
         self.round_cron = round_cron  # used when hof_type="cron"
@@ -967,12 +969,12 @@ class GameEngine:
         if not online: return []
         p  = random.choice(online)
         IE = {
-            "amulet":          f"{utag(p)}'s amulet was lost overboard in a storm",
-            "charm":           f"{utag(p)}'s charm was stolen by a port pickpocket",
-            "weapon":          f"{utag(p)} left their weapon to rust in the bilge",
-            "tunic":           f"{utag(p)}'s tunic was shredded by the Kraken's tentacle",
-            "shield":          f"{utag(p)}'s shield was crushed under a falling mast",
-            "set of leggings": f"{utag(p)}'s leggings were eaten by ship rats",
+            "amulet":   f"{utag(p)}'s amulet was lost overboard in a storm",
+            "idol":     f"{utag(p)}'s idol was stolen by a port pickpocket",
+            "cutlass":  f"{utag(p)} left their cutlass to rust in the bilge",
+            "coat":     f"{utag(p)}'s coat was shredded by the Kraken's tentacle",
+            "buckler":  f"{utag(p)}'s buckler was crushed under a falling mast",
+            "breeches": f"{utag(p)}'s breeches were eaten by ship rats",
         }
         if random.random() < 0.1:
             slot = random.choice(list(IE.keys()))
@@ -1007,12 +1009,12 @@ class GameEngine:
         if not online: return []
         p  = random.choice(online)
         IE = {
-            "amulet":          f"{utag(p)}'s amulet was blessed by a sea witch",
-            "charm":           f"{utag(p)}'s charm glowed after surviving the Howling Gale",
-            "weapon":          f"{utag(p)} had their weapon reforged by a Freeport blacksmith",
-            "tunic":           f"A mermaid wove enchanted silk into {utag(p)}'s tunic",
-            "shield":          f"{utag(p)}'s shield was reinforced with kraken bone",
-            "set of leggings": f"{utag(p)}'s leggings were stitched with enchanted sailcloth",
+            "amulet":   f"{utag(p)}'s amulet was blessed by a sea witch",
+            "idol":     f"{utag(p)}'s idol glowed after surviving the Howling Gale",
+            "cutlass":  f"{utag(p)} had their cutlass reforged by a Freeport blacksmith",
+            "coat":     f"A mermaid wove enchanted silk into {utag(p)}'s coat",
+            "buckler":  f"{utag(p)}'s buckler was reinforced with kraken bone",
+            "breeches": f"{utag(p)}'s breeches were stitched with enchanted sailcloth",
         }
         if random.random() < 0.1:
             slot = random.choice(list(IE.keys()))

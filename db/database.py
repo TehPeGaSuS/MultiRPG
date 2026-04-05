@@ -6,8 +6,8 @@ import aiosqlite
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 ITEM_SLOTS  = [
-    "ring","amulet","charm","weapon","helm",
-    "tunic","pair of gloves","shield","set of leggings","pair of boots",
+    "trinket","amulet","idol","cutlass","tricorn",
+    "coat","gauntlets","buckler","breeches","sea boots",
 ]
 
 class Database:

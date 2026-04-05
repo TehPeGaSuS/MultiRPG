@@ -80,6 +80,10 @@ class IRCBot:
             self._writer.write((line + "\r\n").encode("utf-8"))
             await self._writer.drain()
 
+    async def voice_user(self, nick):
+        """Voice a user in the channel (+v). Silently ignored if bot has no ops."""
+        await self._raw(f"MODE {self.channel} +v {nick}")
+
     async def say(self, msg):
         if self.engine.silent in (1, 3): return   # channel msgs suppressed
         for chunk in _split(msg):
@@ -170,6 +174,12 @@ class IRCBot:
                         f"{n} user{'s' if n != 1 else ''} automatically logged in on "
                         f"{self.network_name}."
                     )
+                    # Delay voicing to give services time to grant bot ops after join
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(5)
+                    for p in net_online:
+                        if p.get("current_nick"):
+                            await self.voice_user(p["current_nick"])
                 return
 
         # Lines below need a proper :prefix
@@ -210,6 +220,7 @@ class IRCBot:
                         p["id"], usernick, self.channel, uh)
                     log.info(
                         f"[{self.network_name}] Auto-login: {usernick} ({uh}) → {p['username']}")
+                    await self.voice_user(usernick)
             return
 
         # Ignore our own messages for all other commands
@@ -286,6 +297,8 @@ class IRCBot:
                 args[1], " ".join(args[2:]), userhost=userhost)
             await reply(priv)
             await self._deliver_local(broadcasts)
+            if ok:
+                await self.voice_user(nick)
 
         elif cmd == "LOGIN":
             if len(args) < 2:
@@ -294,6 +307,8 @@ class IRCBot:
                 args[0], self.network_name, nick, self.channel,
                 args[1], userhost=userhost)
             await reply(msg)
+            if ok:
+                await self.voice_user(nick)
 
         elif cmd == "LOGOUT":
             broadcasts = await self.engine.on_logout(nick, self.network_name)

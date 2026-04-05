@@ -431,6 +431,10 @@ setInterval(fetchPlayers, 5000);
 # adapted for this multi-network implementation.
 
 async def handle_info(req):
+    engine   = req.app.get("engine")
+    rp_base  = engine.rp_base  if engine and hasattr(engine, "rp_base")  else 600
+    rp_step  = engine.rp_step  if engine and hasattr(engine, "rp_step")  else 1.21
+    win_level = engine.win_level if engine and hasattr(engine, "win_level") else 40
     css = """
 .info{max-width:820px;margin:2rem auto;padding:0 1.5rem 3rem}
 h2{font-family:'Cinzel',serif;color:var(--gold);font-size:1.1rem;letter-spacing:0.08em;
@@ -450,7 +454,7 @@ td:first-child{color:#ffe88a;font-family:monospace}
 ul{margin:0.4rem 0 0.4rem 1.5rem;line-height:1.9}
 .note{color:#a08050;font-style:italic;font-size:0.88rem}
 """
-    body = """<div class="info">
+    body = f"""<div class="info">
 
 <h2>What is Multi IdleRPG?</h2>
 <p>The Multi IdleRPG is just what it sounds like: an RPG in which the players idle. In addition
@@ -509,7 +513,7 @@ All users start as neutral.</p>
 <h2>Levelling</h2>
 <p>To gain levels, you must only be logged in and idle. The time between levels is based on
 your character level, calculated by the formula:</p>
-<pre>600 × (1.21 ^ YOUR_LEVEL)  seconds</pre>
+<pre>{rp_base} × ({rp_step} ^ YOUR_LEVEL)  seconds</pre>
 <p>Very high levels (above 60) are calculated differently:</p>
 <pre>(time to level at 60) + (86400 × (level − 60))  seconds</pre>
 
@@ -536,8 +540,8 @@ Messages and notices are p[length of message in characters].</p>
 <h2>Items</h2>
 <p>Each time you level, you find an item. You can find an item as high as
 <code>1.5 × YOUR_LEVEL</code> (unless you find a <a href="#uniqueitems">unique item</a>).
-There are 10 types of items: ring, amulet, charm, weapon, helm, tunic, pair of gloves,
-shield, set of leggings, and pair of boots. When you find an item with a level higher than
+There are 10 types of items: trinket, amulet, idol, cutlass, tricorn, coat, gauntlets,
+buckler, breeches, and sea boots. When you find an item with a level higher than
 your current item of that type, you equip it. The exact item level formula is:</p>
 <pre>for each number from 1 to YOUR_LEVEL×1.5:
     you have a 1 / (1.4 ^ number) chance to find an item at this level</pre>
@@ -566,15 +570,15 @@ players, which may also trigger battle.</p>
 <h2>Unique Items</h2>
 <p>After level 25, you have a 1/40 chance per level-up to find a unique item:</p>
 <table>
-  <tr><th>Name</th><th>Item Level</th><th>Required Level</th></tr>
-  <tr><td>Mattt's Omniscience Grand Crown</td><td>50–74</td><td>25+</td></tr>
-  <tr><td>Juliet's Glorious Ring of Sparkliness</td><td>50–74</td><td>25+</td></tr>
-  <tr><td>Res0's Protectorate Plate Mail</td><td>75–99</td><td>30+</td></tr>
-  <tr><td>Dwyn's Storm Magic Amulet</td><td>100–124</td><td>35+</td></tr>
-  <tr><td>Jotun's Fury Colossal Sword</td><td>150–174</td><td>40+</td></tr>
-  <tr><td>Drdink's Cane of Blind Rage</td><td>175–200</td><td>45+</td></tr>
-  <tr><td>Mrquick's Magical Boots of Swiftness</td><td>250–300</td><td>48+</td></tr>
-  <tr><td>Jeff's Cluehammer of Doom</td><td>300–350</td><td>52+</td></tr>
+  <tr><th>Name</th><th>Slot</th><th>Item Level</th><th>Required Level</th></tr>
+  <tr><td>The Admiral's Grand Tricorn</td><td>tricorn</td><td>50–74</td><td>25+</td></tr>
+  <tr><td>Davy Jones' Cursed Trinket</td><td>trinket</td><td>50–74</td><td>25+</td></tr>
+  <tr><td>The Kraken Hunter's Coat</td><td>coat</td><td>75–99</td><td>30+</td></tr>
+  <tr><td>The Sea Witch's Amulet</td><td>amulet</td><td>100–124</td><td>35+</td></tr>
+  <tr><td>Blackbeard's Fury Cutlass</td><td>cutlass</td><td>150–174</td><td>40+</td></tr>
+  <tr><td>The Dead Man's Cutlass of Ruin</td><td>cutlass</td><td>175–200</td><td>45+</td></tr>
+  <tr><td>Navigator's Enchanted Sea Boots</td><td>sea boots</td><td>250–300</td><td>48+</td></tr>
+  <tr><td>The Cannon of Doom</td><td>cutlass</td><td>300–350</td><td>52+</td></tr>
 </table>
 
 <h2>The Hand of God</h2>
@@ -603,7 +607,7 @@ of their TTL, or b) one item loses 10% of its value.</p>
 5–12% toward their next level, or b) one item gains 10% of its value.</p>
 
 <h2>Quests</h2>
-<p>Four level 40+ users that have been online for more than 10 hours are chosen to go on a
+<p>Four level {win_level}+ users that have been online for more than 10 hours are chosen to go on a
 quest. There are two types: <em>time-based</em> (lasting 12–24 hours) and
 <em>grid-based</em> (questers must walk to two map coordinates). On success, all four
 questers have 25% of their TTL removed. If any quester is penalized before the quest ends,
@@ -624,13 +628,10 @@ of the loser's items — but only if the loser's item of that type is higher lev
 challenger's old item is given to the loser in a moment of pity.</p>
 
 <h2>Credits</h2>
-<p>Many thanks to version 3.0's map creators, <strong>res0</strong> and <strong>Jeb</strong>!
-The game wouldn't be the same without you.</p>
-<p>The IRPG was created by jotun. Thanks also to jwbozzy, yawnwraith, Tosirap, res0, dwyn,
-Parallax, protomek, Bert, clavicle, drdink, jeff, rasher, Sticks, Nerje, Asterax, emad,
-inkblot, schmolli, mikegrb, mumkin, sean, Minhiriath, and many others.</p>
-<p>This multi-network Python implementation was built from scratch, honouring the original
-game logic as closely as possible.</p>
+<p>Idle RPG was created by <strong>jotun</strong>. Original map by <strong>res0</strong>
+and <strong>Jeb</strong>.</p>
+<p>This pirate-themed multi-network Python implementation was built from scratch,
+honouring the original game logic as closely as possible.</p>
 
 </div>"""
     return web.Response(text=page("Game Info", body, css, show_hof=_show_hof(req)), content_type="text/html")
@@ -1006,14 +1007,14 @@ async def handle_play(req):
 # ── Player profile ────────────────────────────────────────────────────────────
 
 ITEM_SLOTS = [
-    "amulet", "charm", "helm", "pair of gloves", "pair of boots",
-    "ring", "set of leggings", "shield", "tunic", "weapon",
+    "amulet", "idol", "tricorn", "gauntlets", "sea boots",
+    "trinket", "breeches", "buckler", "coat", "cutlass",
 ]
 SLOT_LABEL = {
-    "amulet":"Amulet","charm":"Charm","helm":"Helm",
-    "pair of gloves":"Gloves","pair of boots":"Boots",
-    "ring":"Ring","set of leggings":"Leggings",
-    "shield":"Shield","tunic":"Tunic","weapon":"Weapon",
+    "amulet":"Amulet","idol":"Idol","tricorn":"Tricorn",
+    "gauntlets":"Gauntlets","sea boots":"Sea Boots",
+    "trinket":"Trinket","breeches":"Breeches",
+    "buckler":"Buckler","coat":"Coat","cutlass":"Cutlass",
 }
 
 async def handle_player(req):
