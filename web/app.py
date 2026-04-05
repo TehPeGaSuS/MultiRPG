@@ -670,6 +670,13 @@ ul{margin:0.4rem 0 0.4rem 1.5rem;line-height:1.9}
 by 5-75% of their TTL (80% chance to help, 20% to hinder).</p>
 <pre>/msg MultiRPG HOG</pre>
 
+<h3>FORCEQUEST — Force-Start a Quest</h3>
+<p>Force-start a quest immediately, ignoring the quest timer and eligibility checks.
+Useful for testing or manually kicking off a quest when the queue seems stuck.</p>
+<pre>/msg MultiRPG FORCEQUEST</pre>
+<p class="note">Regular users can use <code>QUEST</code> to check the active quest status.
+<code>FORCEQUEST</code> is the admin-only command to force-start one.</p>
+
 <h3>PAUSE — Toggle Pause Mode</h3>
 <p>Stops the tick loop completely — no TTL countdown, no events, no movement.
 Run again to resume. Use before maintenance or when investigating issues.</p>
