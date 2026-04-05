@@ -13,6 +13,15 @@ Summon the Hand of God immediately. Randomly helps or hurts one online player by
 /msg MultiRPG HOG
 ```
 
+### `FORCEQUEST`
+Force-start a quest immediately, ignoring the quest timer and eligibility checks. Useful for testing or manually kicking off a quest when the queue seems stuck.
+
+```
+/msg MultiRPG FORCEQUEST
+```
+
+> **Note:** Regular users can use `QUEST` to check active quest status. `FORCEQUEST` is the admin-only command to force-start one.
+
 ### `PAUSE`
 Toggle pause mode. When paused, the tick loop stops completely — no TTL countdown, no events, no movement. Use before maintenance. Run again to resume.
 

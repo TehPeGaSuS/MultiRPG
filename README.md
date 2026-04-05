@@ -40,8 +40,11 @@ python3 main.py
 
 ```toml
 [game]
-self_clock = 5
-limit_pen  = 0
+self_clock  = 5
+limit_pen   = 0
+hof_type    = "level"           # "level", "cron", or "none"
+win_level   = 40                # used when hof_type = "level"
+round_cron  = "0 0 1 1,4,7,10 *"  # used when hof_type = "cron" (quarterly)
 
 [web]
 host = "0.0.0.0"
@@ -119,6 +122,7 @@ Or add a cron job:
 | `/info` | Game info and mechanics |
 | `/quest` | Active quest status |
 | `/play` | Where to play — IRC networks and channels |
+| `/hof` | Hall of Fame — top players from past rounds (hidden when `hof_type = none`) |
 | `/admin` | Admin command reference |
 
 ---
@@ -165,7 +169,7 @@ All commands are sent via **private message** to the bot. Talking in the channel
 
 See [ADMIN.md](ADMIN.md) for the full reference. Quick list:
 
-`HOG` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>`
+`HOG` `FORCEQUEST` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>`
 
 To make yourself admin, first register a character, then run directly against the database:
 ```bash

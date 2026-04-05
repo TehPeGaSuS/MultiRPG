@@ -8,9 +8,8 @@ from db.database import Database, ITEM_SLOTS
 log = logging.getLogger(__name__)
 
 MAP_X, MAP_Y         = 500, 500
-RP_BASE, RP_STEP     = 600, 1.21
+RP_BASE, RP_STEP     = 600, 1.16
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
-WIN_LEVEL            = 40     # level that ends a round
 
 
 def base_ttl(level: int) -> int:
@@ -165,10 +164,16 @@ async def resolve_battle(db: Database, challenger, opponent,
 
 # ── Game Engine ───────────────────────────────────────────────────────────────
 class GameEngine:
-    def __init__(self, db: Database, self_clock: int = 5, limit_pen: int = 0):
+    def __init__(self, db: Database, self_clock: int = 5, limit_pen: int = 0,
+                 hof_type: str = "level", win_level: int = 40,
+                 round_cron: str = "0 0 1 1,4,7,10 *"):
         self.db         = db
         self.self_clock = self_clock
         self.limit_pen  = limit_pen
+        self.hof_type   = hof_type    # "level", "cron", or "none"
+        self.win_level  = win_level   # used when hof_type="level"
+        self.round_cron = round_cron  # used when hof_type="cron"
+        self._last_cron_check = 0     # last timestamp cron was evaluated
         self._lasttime  = 0          # 0 = not joined yet
         self._rpreport  = self_clock  # start at sc so tick 1 doesn't trigger modulo-zero events
         self.paused          = False  # PAUSE command stops tick processing
@@ -193,9 +198,11 @@ class GameEngine:
             log.info(f"Restored active quest: {q['text']!r} — questers: {names}")
 
     async def check_win_condition(self) -> list:
-        """Called on startup — if any player is already at WIN_LEVEL, trigger reset."""
+        """Called on startup — if any player is already at win_level, trigger reset."""
+        if self.hof_type != "level":
+            return []
         all_players = await self.db.get_all_players()
-        winners = [p for p in all_players if p["level"] >= WIN_LEVEL]
+        winners = [p for p in all_players if p["level"] >= self.win_level]
         if winners and not self._reset_pending and not self._quest["questers"]:
             self._reset_pending = True
             self._reset_at      = int(time.time()) + 60
@@ -205,7 +212,7 @@ class GameEngine:
                         f"triggering end of Round {round_num} in 60s")
             return [broadcast_all(
                 f"⚠️ {top['username']}@{top['network']} reached level "
-                f"{WIN_LEVEL} — Round {round_num} ending in 60 seconds! "
+                f"{self.win_level} — Round {round_num} ending in 60 seconds! "
                 f"Your characters will be reset. Keep idling to continue!"
             )]
         return []
@@ -535,6 +542,25 @@ class GameEngine:
         if self._reset_pending and int(time.time()) >= self._reset_at:
             return await self._do_round_reset()
 
+        # ── Cron-based round end ──────────────────────────────────────────────
+        if self.hof_type == "cron" and not self._reset_pending:
+            from croniter import croniter
+            now = int(time.time())
+            if self._last_cron_check == 0:
+                self._last_cron_check = now
+            cron = croniter(self.round_cron, now - self.self_clock - 1)
+            next_fire = cron.get_next(float)
+            if self._last_cron_check < next_fire <= now and not self._quest["questers"]:
+                self._reset_pending = True
+                self._reset_at      = now + 60
+                round_num           = await self.db.get_round()
+                self._last_cron_check = now
+                return [broadcast_all(
+                    f"⏰ Scheduled end of Round {round_num}! "
+                    f"The realm will be reborn in 60 seconds."
+                )]
+            self._last_cron_check = now
+
         msgs    = []
         online  = await self.db.get_online_players()
         if not online:
@@ -620,12 +646,15 @@ class GameEngine:
         await self.db.level_up(p["id"], new_level, new_ttl)
 
         # ── End of round check ────────────────────────────────────────────────
-        if new_level >= WIN_LEVEL and not self._reset_pending and not self._quest["questers"]:
+        if (self.hof_type == "level"
+                and new_level >= self.win_level
+                and not self._reset_pending
+                and not self._quest["questers"]):
             self._reset_pending = True
             self._reset_at      = int(time.time()) + 60
             round_num           = await self.db.get_round()
             return [broadcast_all(
-                f"⚠️ {utag(p)} has reached level {WIN_LEVEL} "
+                f"⚠️ {utag(p)} has reached level {self.win_level} "
                 f"and ended Round {round_num}! "
                 f"The realm will be reborn in 60 seconds. "
                 f"Prepare to re-register for Round {round_num + 1}!"

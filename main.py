@@ -20,8 +20,11 @@ DB_PATH     = Path(_HERE) / "multirpg.db"
 
 DEFAULT_CONFIG = """\
 [game]
-self_clock = 5
-limit_pen  = 0
+self_clock  = 5
+limit_pen   = 0
+hof_type    = "level"              # "level", "cron", or "none"
+win_level   = 40                   # used when hof_type = "level"
+round_cron  = "0 0 1 1,4,7,10 *"  # used when hof_type = "cron"
 
 [[networks]]
 name    = "swiftirc"
@@ -96,9 +99,14 @@ async def main():
     log.info(f"DB connected ({DB_PATH})")
 
     game_cfg   = config.get("game", {})
-    self_clock = int(game_cfg.get("self_clock", 5))
-    limit_pen  = int(game_cfg.get("limit_pen",  0))
-    engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen)
+    self_clock  = int(game_cfg.get("self_clock",  5))
+    limit_pen   = int(game_cfg.get("limit_pen",   0))
+    hof_type    = str(game_cfg.get("hof_type",    "level"))
+    win_level   = int(game_cfg.get("win_level",   40))
+    round_cron  = str(game_cfg.get("round_cron",  "0 0 1 1,4,7,10 *"))
+    engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen,
+                            hof_type=hof_type, win_level=win_level,
+                            round_cron=round_cron)
     await engine.load_persisted_quest()
     startup_msgs = await engine.check_win_condition()
     if startup_msgs:

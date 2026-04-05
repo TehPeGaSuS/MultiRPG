@@ -66,6 +66,7 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     app["db"] = db
     app["engine"] = engine
     app["networks"] = networks or []
+    app["hof_type"] = engine.hof_type if engine else "level"
     app.router.add_get("/",            handle_index)
     app.router.add_get("/favicon.svg",   handle_favicon)
     app.router.add_get("/map",         handle_map)
@@ -74,7 +75,8 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     app.router.add_get("/quest",       handle_quest)
     app.router.add_get("/player/{username}", handle_player)
     app.router.add_get("/play",        handle_play)
-    app.router.add_get("/hof",         handle_hof)
+    if (engine and engine.hof_type != "none"):
+        app.router.add_get("/hof",         handle_hof)
     app.router.add_get("/api/quest",   handle_api_quest)
     app.router.add_get("/api/players", handle_api_players)
     app.router.add_get("/api/events",  handle_api_events)
@@ -84,13 +86,15 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
 
 # ── Shared ────────────────────────────────────────────────────────────────────
 
-NAV = """<nav>
+def make_nav(show_hof: bool = True) -> str:
+    hof_link = '  <a href="/hof">🏆 Hall of Fame</a>' if show_hof else ""
+    return f"""<nav>
   <a href="/">🏆 Leaderboard</a>
   <a href="/map">🌐 World Map</a>
   <a href="/info">📖 Game Info</a>
   <a href="/quest">🧭 Quest</a>
   <a href="/play">🕹️ Where to Play</a>
-  <a href="/hof">🏆 Hall of Fame</a>
+{hof_link}
   <a href="/admin">🔑 Admin</a>
 </nav>"""
 
@@ -113,15 +117,19 @@ nav a:hover{color:var(--gold)}
 .container{max-width:1100px;margin:2rem auto;padding:0 1.5rem}
 """
 
-def page(title, body, extra_css="", extra_head=""):
+def page(title, body, extra_css="", extra_head="", show_hof=True):
     return f"""<!DOCTYPE html><html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Multi IdleRPG — {title}</title>
 <style>{COMMON_CSS}{extra_css}</style>{extra_head}</head>
 <body>
 <header><h1>⚔ Multi IdleRPG ⚔</h1><p>The ancient art of doing absolutely nothing</p></header>
-{NAV}
+{make_nav(show_hof)}
 {body}
 </body></html>"""
+
+def _show_hof(req) -> bool:
+    """Return True if HoF is enabled (not hof_type=none)."""
+    return req.app.get("hof_type", "level") != "none"
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
@@ -221,7 +229,7 @@ async function refreshLeaderboard() {
 refreshLeaderboard();
 setInterval(refreshLeaderboard, 10000);
 </script>"""
-    return web.Response(text=page("Leaderboard", body, css),
+    return web.Response(text=page("Leaderboard", body, css, show_hof=_show_hof(req)),
         content_type="text/html")
 
 # ── World Map ─────────────────────────────────────────────────────────────────
@@ -416,7 +424,7 @@ fetchPlayers();
 setInterval(fetchPlayers, 5000);
 </script>"""
 
-    return web.Response(text=page("World Map", body, css), content_type="text/html")
+    return web.Response(text=page("World Map", body, css, show_hof=_show_hof(req)), content_type="text/html")
 
 # ── Game Info ─────────────────────────────────────────────────────────────────
 # Faithful reproduction of the original idlerpg.net/info.php page,
@@ -625,7 +633,7 @@ inkblot, schmolli, mikegrb, mumkin, sean, Minhiriath, and many others.</p>
 game logic as closely as possible.</p>
 
 </div>"""
-    return web.Response(text=page("Game Info", body, css), content_type="text/html")
+    return web.Response(text=page("Game Info", body, css, show_hof=_show_hof(req)), content_type="text/html")
 
 
 # ── Admin Commands page ───────────────────────────────────────────────────────
@@ -732,7 +740,7 @@ The player will need to log in again with the new name.</p>
 </div>
 
 </div>"""
-    return web.Response(text=page("Admin Commands", body, css), content_type="text/html")
+    return web.Response(text=page("Admin Commands", body, css, show_hof=_show_hof(req)), content_type="text/html")
 
 
 # ── Quest API ─────────────────────────────────────────────────────────────────
@@ -916,8 +924,7 @@ fetchQuest();
 setInterval(fetchQuest, 15000);
 </script>"""
 
-    return web.Response(text=page("Quest", body, css,
-),
+    return web.Response(text=page("Quest", body, css, show_hof=_show_hof(req)),
                         content_type="text/html")
 
 
@@ -992,7 +999,7 @@ async def handle_play(req):
   Example: Type <code>"/msg {networks[0].get("nick","MultiRPG") if networks else "MultiRPG"} HELP"</code> to get started.</p>
 </div>"""
 
-    return web.Response(text=page("Where to Play", body, css),
+    return web.Response(text=page("Where to Play", body, css, show_hof=_show_hof(req)),
                         content_type="text/html")
 
 
@@ -1016,7 +1023,7 @@ async def handle_player(req):
     p        = await db.get_player_any_network(username)
     if not p:
         body = f'<div class="container" style="padding:2rem"><p>Player <b>{username}</b> not found. <a href="/" style="color:var(--gold)">Back to leaderboard</a></p></div>'
-        return web.Response(text=page("Not Found", body), content_type="text/html")
+        return web.Response(text=page("Not Found", body, show_hof=_show_hof(req)), content_type="text/html")
 
     items  = {r["slot"]: r for r in await db.get_items(p["id"])}
     isum   = sum(r["level"] for r in items.values())
@@ -1178,7 +1185,7 @@ ctx.fillText(lbl,lx,ly);
 </script>
 """
 
-    return web.Response(text=page(f"{p['username']} — Profile", body, css),
+    return web.Response(text=page(f"{p['username']} — Profile", body, css, show_hof=_show_hof(req)),
                         content_type="text/html")
 
 
@@ -1246,5 +1253,5 @@ async def handle_hof(req):
             body_parts.append('</div>')
 
     body_parts.append('</div>')
-    return web.Response(text=page("Hall of Fame", '\n'.join(body_parts), css),
+    return web.Response(text=page("Hall of Fame", '\n'.join(body_parts), css, show_hof=True),
                         content_type="text/html")
