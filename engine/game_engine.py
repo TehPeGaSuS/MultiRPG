@@ -170,7 +170,7 @@ class GameEngine:
         self.self_clock = self_clock
         self.limit_pen  = limit_pen
         self._lasttime  = 0          # 0 = not joined yet
-        self._rpreport  = 0
+        self._rpreport  = self_clock  # start at sc so tick 1 doesn't trigger modulo-zero events
         self.paused          = False  # PAUSE command stops tick processing
         self._reset_pending  = False  # True during 60s end-of-round grace period
         self._reset_at       = 0      # timestamp when reset fires
@@ -702,10 +702,12 @@ class GameEngine:
 
         # Build state once OUTSIDE the loop — updates carry forward each step
         player_state = {p["id"]: dict(p) for p in online}
-        # positions is shared across all steps so a pair can only collide once per tick
-        positions = {}
+
+        # Track which pairs have already battled this tick (across all movement steps)
+        battled_pairs = set()
 
         for _ in range(self.self_clock):
+            positions = {}
 
             for p in online:
                 pid = p["id"]
@@ -727,18 +729,18 @@ class GameEngine:
                 await self.db.update_position(pid, nx, ny)
 
                 key = (nx, ny)
-                if key in positions and not positions[key]["battled"]:
-                    # Only battle if it's a different player
-                    other_pid = positions[key]["pid"]
-                    if other_pid != pid and n > 1 and random.random() < 1 / n:
-                        positions[key]["battled"] = True
+                if key in positions:
+                    other_pid = positions[key]
+                    pair = (min(pid, other_pid), max(pid, other_pid))
+                    if other_pid != pid and n > 1 and pair not in battled_pairs and random.random() < 1 / n:
+                        battled_pairs.add(pair)
                         msgs.extend(await resolve_battle(
                             self.db,
                             player_state[pid],
                             player_state[other_pid],
                             collision=True))
                 else:
-                    positions[key] = {"pid": pid, "battled": False}
+                    positions[key] = pid
 
         # Grid quest completion check
         if q["questers"] and q["type"] == 2:
