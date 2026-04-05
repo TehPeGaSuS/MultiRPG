@@ -713,7 +713,13 @@ class GameEngine:
                 if key in positions:
                     other_pid = positions[key]
                     pair = (min(pid, other_pid), max(pid, other_pid))
-                    if other_pid != pid and n > 1 and pair not in battled_pairs and random.random() < 1 / n:
+                    # No collision battles during grid quests — questers converge
+                    # on the same cell intentionally, battles would be unfair
+                    is_quest_collision = (q["type"] == 2 and q["questers"]
+                                          and (pid in qids or other_pid in qids))
+                    if (other_pid != pid and n > 1 and pair not in battled_pairs
+                            and not is_quest_collision
+                            and random.random() < 1 / n):
                         battled_pairs.add(pair)
                         msgs.extend(await resolve_battle(
                             self.db,
