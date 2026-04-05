@@ -36,9 +36,8 @@ CREATE TABLE IF NOT EXISTS items (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     slot        TEXT    NOT NULL CHECK(slot IN (
-                    'ring','amulet','charm','weapon','helm',
-                    'tunic','pair of gloves','shield',
-                    'set of leggings','pair of boots'
+                    'trinket','amulet','idol','cutlass','tricorn',
+                    'coat','gauntlets','buckler','breeches','sea boots'
                 )),
     level       INTEGER NOT NULL DEFAULT 0,
     name        TEXT,
