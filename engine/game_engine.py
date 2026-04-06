@@ -8,7 +8,7 @@ from db.database import Database, ITEM_SLOTS
 log = logging.getLogger(__name__)
 
 MAP_X, MAP_Y         = 500, 500
-RP_BASE, RP_STEP     = 600, 1.16
+RP_BASE, RP_STEP     = 600, 1.21
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
 
 
