@@ -170,12 +170,15 @@ class IRCBot:
                 net_online = [p for p in online if p["network"] == self.network_name]
                 if net_online:
                     n = len(net_online)
+                    # Delay to let the server settle before sending messages —
+                    # some servers silently drop PRIVMSGs sent immediately after JOIN
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(2)
                     await self.say(
                         f"{n} user{'s' if n != 1 else ''} automatically logged in on "
                         f"{self.network_name}."
                     )
-                    # Delay voicing to give services time to grant bot ops after join
-                    import asyncio as _asyncio
+                    # Additional delay for voicing — services need time to grant ops
                     await _asyncio.sleep(5)
                     for p in net_online:
                         if p.get("current_nick"):
