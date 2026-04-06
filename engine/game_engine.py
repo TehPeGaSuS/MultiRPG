@@ -429,12 +429,17 @@ class GameEngine:
         self._quest["p1name"] = lm1[0]
         self._quest["p2name"] = lm2[0]
         self._quest["text"]   = "chart the treacherous waters between two pirate strongholds"
-        msg = (f"{names} have been chosen by the gods to "
-               f"{self._quest['text']}. "
-               f"First reach {lm1[0]}, then {lm2[0]}.")
+        names_coords = ", ".join(
+            f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
+            for q in questers)
+        msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
+        msg2 = (f"⚓ QUEST: {self._quest['text'].capitalize()}. "
+                f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
+                f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
+        msg = f"{msg1} {msg2}"
         await self.db.log_event("quest", msg)
         await self.db.save_quest(self._quest)
-        return [broadcast_all(msg)]
+        return [broadcast_all(msg1), broadcast_all(msg2)]
 
     async def cmd_newpass(self, nick, network, pw) -> str:
         p = await self.db.get_player_by_nick(nick, network)
@@ -864,8 +869,12 @@ class GameEngine:
             self._quest["type"]  = 1
             dur = random.randint(43200, 86400)
             self._quest["qtime"] = now + dur
-            msg = (f"{names} have been chosen by the gods to {text}. "
-                   f"Quest ends in {fmt_time(dur)}.")
+            names_coords = ", ".join(
+                f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
+                for q in questers)
+            msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
+            msg2 = f"⚓ QUEST: {text.capitalize()}. Quest ends in {fmt_time(dur)}."
+            msg  = f"{msg1} {msg2}"
         else:
             self._quest["type"]   = 2
             self._quest["stage"]  = 1
@@ -878,11 +887,17 @@ class GameEngine:
             self._quest["p2"]     = (lm2[1], lm2[2])
             self._quest["p1name"] = lm1[0]
             self._quest["p2name"] = lm2[0]
-            msg = (f"{names} have been chosen by the gods to {text}. "
-                   f"First reach {lm1[0]}, then {lm2[0]}.")
+            names_coords = ", ".join(
+                f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
+                for q in questers)
+            msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
+            msg2 = (f"⚓ QUEST: {text.capitalize()}. "
+                    f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
+                    f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
+            msg  = f"{msg1} {msg2}"
         await self.db.log_event("quest", msg)
         await self.db.save_quest(self._quest)
-        return [broadcast_all(msg)]
+        return [broadcast_all(msg1), broadcast_all(msg2)]
 
     # ── Daily events ──────────────────────────────────────────────────────────
 
