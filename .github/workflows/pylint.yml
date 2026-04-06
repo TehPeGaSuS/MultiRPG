@@ -12,7 +12,7 @@ jobs:
         python-version: "3.11"
     - name: Install dependencies
       run: |
-        pip install pylint aiosqlite aiohttp
+        pip install pylint aiosqlite aiohttp croniter
     - name: Pylint
       run: |
         pylint --disable=C,R --errors-only $(git ls-files '*.py')
