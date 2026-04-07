@@ -1199,6 +1199,31 @@ ctx.fillText(lbl,lx,ly);
 
 # ── Hall of Fame ──────────────────────────────────────────────────────────────
 
+def _next_cron_str(expr: str) -> str:
+    """Return a human-readable string for the next occurrence of a cron expression.
+
+    Example: "0 0 1 1,4,7,10 *" → "1 July 2026 at midnight UTC"
+    Falls back to the raw expression if croniter is unavailable or the expr is invalid.
+    """
+    try:
+        from croniter import croniter
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
+        nxt = croniter(expr, now).get_next(_dt.datetime)
+        h, m = nxt.hour, nxt.minute
+        if h == 0 and m == 0:
+            time_str = "midnight UTC"
+        elif h == 12 and m == 0:
+            time_str = "noon UTC"
+        else:
+            suffix = "AM" if h < 12 else "PM"
+            h12 = h % 12 or 12
+            time_str = f"{h12}:{m:02d} {suffix} UTC" if m else f"{h12} {suffix} UTC"
+        return nxt.strftime("%-d %B %Y") + " at " + time_str
+    except Exception:
+        return expr
+
+
 async def handle_hof(req):
     import datetime
     db      = req.app["db"]
@@ -1239,12 +1264,19 @@ async def handle_hof(req):
         rounds[r].append(e)
 
     body_parts = [f'<div class="hof">']
-    body_parts.append(
-        f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
+    if hof_type == "cron" and round_cron:
+        schedule = _next_cron_str(round_cron)
+        body_parts.append(
+            f'<div class="current-round">Currently on <span>Round {current_round}</span>'
+            f' &nbsp;·&nbsp; next reset {schedule}</div>')
+    else:
+        body_parts.append(
+            f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
 
     if not rounds:
         if hof_type == "cron":
-            empty_msg = f"No completed rounds yet — rounds end on schedule ({round_cron})."
+            schedule = _next_cron_str(round_cron)
+            empty_msg = f"No completed rounds yet — the next round ends {schedule}."
         else:
             empty_msg = f"No completed rounds yet — be the first to reach level {win_level}!"
         body_parts.append(f'<div class="empty">{empty_msg}</div>')
