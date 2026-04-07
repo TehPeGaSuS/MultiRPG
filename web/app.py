@@ -1203,7 +1203,10 @@ async def handle_hof(req):
     import datetime
     db      = req.app["db"]
     entries = await db.get_hof()
-    engine  = req.app.get("engine")
+    engine     = req.app.get("engine")
+    hof_type   = engine.hof_type  if engine else "level"
+    win_level  = engine.win_level if engine else 40
+    round_cron = engine.round_cron if engine else ""
     current_round = await db.get_round()
 
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
@@ -1240,7 +1243,11 @@ async def handle_hof(req):
         f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
 
     if not rounds:
-        body_parts.append('<div class="empty">No completed rounds yet — be the first to reach level 40!</div>')
+        if hof_type == "cron":
+            empty_msg = f"No completed rounds yet — rounds end on schedule ({round_cron})."
+        else:
+            empty_msg = f"No completed rounds yet — be the first to reach level {win_level}!"
+        body_parts.append(f'<div class="empty">{empty_msg}</div>')
     else:
         for round_num in sorted(rounds.keys(), reverse=True):
             winners = rounds[round_num]
