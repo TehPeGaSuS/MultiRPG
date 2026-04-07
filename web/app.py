@@ -1264,19 +1264,13 @@ async def handle_hof(req):
         rounds[r].append(e)
 
     body_parts = [f'<div class="hof">']
-    if hof_type == "cron" and round_cron:
-        schedule = _next_cron_str(round_cron)
-        body_parts.append(
-            f'<div class="current-round">Currently on <span>Round {current_round}</span>'
-            f' &nbsp;·&nbsp; next reset {schedule}</div>')
-    else:
-        body_parts.append(
-            f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
+    body_parts.append(
+        f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
 
     if not rounds:
-        if hof_type == "cron":
+        if hof_type == "cron" and round_cron:
             schedule = _next_cron_str(round_cron)
-            empty_msg = f"No completed rounds yet — the next round ends {schedule}."
+            empty_msg = f"No completed rounds yet — the next round starts on {schedule}."
         else:
             empty_msg = f"No completed rounds yet — be the first to reach level {win_level}!"
         body_parts.append(f'<div class="empty">{empty_msg}</div>')
