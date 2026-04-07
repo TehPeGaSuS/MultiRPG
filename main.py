@@ -104,6 +104,19 @@ async def main():
     hof_type    = str(game_cfg.get("hof_type",    "level"))
     win_level   = int(game_cfg.get("win_level",   40))
     round_cron  = str(game_cfg.get("round_cron",  "0 0 1 1,4,7,10 *"))
+
+    if hof_type == "cron":
+        try:
+            from croniter import croniter
+            croniter(round_cron)  # validate expression is parseable
+        except ImportError:
+            log.error("hof_type=cron requires the 'croniter' package. "
+                      "Run: pip install croniter  (or: pip install -r requirements.txt)")
+            await db.close(); return
+        except Exception:
+            log.error(f"round_cron expression is invalid: {round_cron!r}")
+            await db.close(); return
+
     engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen,
                             hof_type=hof_type, win_level=win_level,
                             round_cron=round_cron)
