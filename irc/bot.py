@@ -139,21 +139,24 @@ class IRCBot:
                 return
 
             # 352 — WHO reply: :server 352 botnick #chan user host server nick H :0 realname
-            if cmd2 == "352" and self._prev_online and len(parts) >= 8:
-                who_nick = parts[7]
-                who_user = parts[4]
-                who_host = parts[5]
-                uh       = f"{who_nick}!{who_user}@{who_host}"
-                uah      = f"{who_user}@{who_host}"
-                for saved_uh, uname in list(self._prev_online.items()):
-                    if "!" in saved_uh and saved_uh.split("!", 1)[1] == uah:
-                        p = await self.engine.db.get_player(uname, self.network_name)
-                        if p:
-                            await self.engine.db.set_online(
-                                p["id"], who_nick, self.channel, uh)
-                            log.info(f"[{self.network_name}] Auto-login: {uname} ({uh})")
-                        del self._prev_online[saved_uh]
-                        break
+            if cmd2 == "352":
+                if self._prev_online and len(parts) >= 8:
+                    who_nick = parts[7]
+                    who_user = parts[4]
+                    who_host = parts[5]
+                    uh       = f"{who_nick}!{who_user}@{who_host}"
+                    uah      = f"{who_user}@{who_host}"
+                    for saved_uh, uname in list(self._prev_online.items()):
+                        # Support both stored formats: "nick!user@host" and "user@host"
+                        saved_uah = saved_uh.split("!", 1)[1] if "!" in saved_uh else saved_uh
+                        if saved_uah == uah:
+                            p = await self.engine.db.get_player(uname, self.network_name)
+                            if p:
+                                await self.engine.db.set_online(
+                                    p["id"], who_nick, self.channel, uh)
+                                log.info(f"[{self.network_name}] Auto-login: {uname} ({uh})")
+                            del self._prev_online[saved_uh]
+                            break
                 return
 
             # 315 — end of WHO
@@ -206,6 +209,10 @@ class IRCBot:
                 }
                 if self._prev_online:
                     log.info(f"[{self.network_name}] {len(self._prev_online)} previously online — sending WHO")
+                    # Small delay: some servers (especially older ircds like DALnet) respond to
+                    # an immediate WHO with an empty 315 because the channel burst hasn't fully
+                    # synced yet.  Two seconds is enough for the memberlist to settle.
+                    await asyncio.sleep(2)
                     await self._raw(f"WHO {self.channel}")
                 else:
                     await self.engine.db.mark_all_offline(self.network_name)

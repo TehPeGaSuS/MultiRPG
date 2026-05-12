@@ -81,10 +81,11 @@ async def game_tick_loop(engine, manager, self_clock):
                 await asyncio.sleep(2)
                 all_players = await engine.db.get_all_players()
                 for bot in manager.bots:
-                    bot._prev_online = {
-                        p["userhost"]: p["username"]
-                        for p in all_players if p["userhost"]
-                    }
+                    # Filter to this bot's network only — cross-network userhosts
+                    # must not bleed into another network's _prev_online map.
+                    net_players = [p for p in all_players
+                                   if p["userhost"] and p.get("network") == bot.network_name]
+                    bot._prev_online = {p["userhost"]: p["username"] for p in net_players}
                     if bot._prev_online:
                         await bot._raw(f"WHO {bot.channel}")
                         log.info(f"[{bot.network_name}] Re-login WHO sent ({len(bot._prev_online)} players)")
