@@ -197,7 +197,6 @@ class IRCBot:
         usernick = prefix.split("!")[0] if "!" in prefix else prefix
 
         # ── JOIN ─────────────────────────────────────────────────────────────
-        # IMPORTANT: handle our own JOIN *before* the early-return below
         if command == "JOIN":
             if usernick == self.current_nick:
                 log.info(f"[{self.network_name}] Joined {self.channel}.")
@@ -218,10 +217,9 @@ class IRCBot:
                     await self.engine.db.mark_all_offline(self.network_name)
                 # mark_joined AFTER setting up prev_online, so tick starts
                 self.engine.mark_joined()
-            return
+                return
 
-        # ── Auto-login by userhost when a user joins the channel ──────────────
-        if command == "JOIN" and usernick != self.current_nick:
+            # ── Auto-login by userhost when another user joins the channel ──
             uh = prefix if "!" in prefix else ""
             if uh and "!" in uh:
                 p = await self.engine.db.get_player_by_userhost(uh, self.network_name)
