@@ -26,6 +26,7 @@ class IRCBot:
         self._send_queue     = asyncio.Queue()
         self.broadcast_callback = None   # set by BotManager
         self._prev_online: dict = {}     # userhost -> username for auto-login
+        self._auto_logged_in: list = []  # nicks matched during WHO (for 315 summary)
 
     async def run(self):
         while True:
@@ -155,6 +156,7 @@ class IRCBot:
                                 await self.engine.db.set_online(
                                     p["id"], who_nick, self.channel, uh)
                                 log.info(f"[{self.network_name}] Auto-login: {uname} ({uh})")
+                                self._auto_logged_in.append(who_nick)
                             del self._prev_online[saved_uh]
                             break
                 return
@@ -168,21 +170,41 @@ class IRCBot:
                         await self.engine.db.set_offline(p["id"])
                         log.info(f"[{self.network_name}] {uname} not in channel — logged out")
                 self._prev_online = {}
-                # Announce single summary of how many were auto-logged in
+                # Announce summary then voice
+                logged_in = self._auto_logged_in[:]
+                self._auto_logged_in = []
+                if logged_in:
+                    n = len(logged_in)
+                    header = (
+                        f"{n} user{'s' if n != 1 else ''} automatically logged in "
+                        f"on {self.network_name}."
+                    )
+                    if n > 10:
+                        # Too many to list — just the count
+                        await self.say(header)
+                    else:
+                        # Split nick list across lines of ~400 chars each
+                        line_limit = 400
+                        nick_str   = ", ".join(logged_in)
+                        if len(header) + 1 + len(nick_str) <= line_limit:
+                            await self.say(f"{header} {nick_str}")
+                        else:
+                            await self.say(header)
+                            chunk, buf = [], ""
+                            for nick in logged_in:
+                                candidate = buf + (", " if buf else "") + nick
+                                if len(candidate) > line_limit:
+                                    await self.say(buf)
+                                    buf = nick
+                                else:
+                                    buf = candidate
+                            if buf:
+                                await self.say(buf)
                 online = await self.engine.db.get_online_players()
                 net_online = [p for p in online if p["network"] == self.network_name]
                 if net_online:
-                    n = len(net_online)
-                    # Delay to let the server settle before sending messages —
-                    # some servers silently drop PRIVMSGs sent immediately after JOIN
-                    import asyncio as _asyncio
-                    await _asyncio.sleep(2)
-                    await self.say(
-                        f"{n} user{'s' if n != 1 else ''} automatically logged in on "
-                        f"{self.network_name}."
-                    )
-                    # Additional delay for voicing — services need time to grant ops
-                    await _asyncio.sleep(5)
+                    # Delay for voicing — services need time to grant ops
+                    await asyncio.sleep(5)
                     for p in net_online:
                         if p.get("current_nick"):
                             await self.voice_user(p["current_nick"])
@@ -206,6 +228,7 @@ class IRCBot:
                     p["userhost"]: p["username"]
                     for p in prev if p["userhost"]
                 }
+                self._auto_logged_in = []  # reset for this reconnect cycle
                 if self._prev_online:
                     log.info(f"[{self.network_name}] {len(self._prev_online)} previously online — sending WHO")
                     # Small delay: some servers (especially older ircds like DALnet) respond to
@@ -228,6 +251,10 @@ class IRCBot:
                         p["id"], usernick, self.channel, uh)
                     log.info(
                         f"[{self.network_name}] Auto-login: {usernick} ({uh}) → {p['username']}")
+                    await self.say(
+                        f"{usernick} reconnected and was automatically logged in "
+                        f"as {p['username']}."
+                    )
                     await self.voice_user(usernick)
             return
 
