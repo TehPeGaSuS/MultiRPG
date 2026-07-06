@@ -26,6 +26,7 @@ class IRCBot:
         self._connected      = False
         self._send_queue     = asyncio.Queue()
         self.broadcast_callback = None   # set by BotManager
+        self.manager            = None   # set by BotManager (for sibling lookup)
         self._prev_online: dict = {}     # userhost -> username for auto-login
         self._auto_logged_in: list = []  # nicks matched during WHO (for 315 summary)
         self._pending_forcelogin = None  # (char, nick, channel, network) waiting for WHO
@@ -80,6 +81,16 @@ class IRCBot:
             except asyncio.TimeoutError: continue
             except asyncio.CancelledError: break
         log.info(f"[{self.network_name}] _send_loop exited")
+
+    def find_bot(self, network_name):
+        """Return the sibling bot connected to `network_name` (case-insensitive),
+        or None if there's no such network or no manager is attached."""
+        if not self.manager:
+            return self if network_name.lower() == self.network_name.lower() else None
+        for bot in self.manager.bots:
+            if bot.network_name.lower() == network_name.lower():
+                return bot
+        return None
 
     async def _raw(self, line):
         if self._writer:
@@ -533,30 +544,38 @@ class IRCBot:
             ok, result = await self.engine.cmd_forcelogin(char_nick, irc_nick, net_name, self.channel, userhost)
             if ok:
                 if isinstance(result, tuple) and result[0] == "needs_who":
-                    # Need to capture userhost via WHO
+                    # Need to capture userhost via WHO. The WHO must be sent by the
+                    # bot connected to the *target* network — it's the only one that
+                    # will receive the 352 reply — not necessarily this bot.
                     _, target_nick, char, chan, net = result
+                    target_bot = self.find_bot(net)
+                    # Use the target network's channel, not the admin's channel.
+                    who_chan = target_bot.channel if target_bot else chan
                     # Set online immediately, then try to capture userhost via WHO
                     p = await self.engine.db.get_player_any_network(char)
                     if p:
-                        await self.engine.db.set_online(p["id"], target_nick, chan, userhost="")
+                        await self.engine.db.set_online(p["id"], target_nick, who_chan, userhost="")
                         bcast = broadcast_net(net, f"{char} has been forcefully logged in from {target_nick} on {net}.")
                         await self._deliver_local([bcast])
-                    self._pending_forcelogin = (char, target_nick, chan, net)
                     await reply(f"{char} will be forcefully logged in as {target_nick}. Searching for userhost...")
-                    # Send WHO to capture userhost if available
-                    if net.lower() == self.network_name.lower():
-                        await self._raw(f"WHO {target_nick}")
+                    # Send WHO on the target network's bot to capture the userhost.
+                    if target_bot and target_bot._connected:
+                        target_bot._pending_forcelogin = (char, target_nick, who_chan, net)
+                        await target_bot._raw(f"WHO {target_nick}")
                     else:
-                        # Different network - log a warning but don't fail
-                        await reply(f"Note: {target_nick}'s userhost could not be captured (not on this network)")
+                        await reply(f"Note: {target_nick}'s userhost could not be captured "
+                                    f"(bot not connected to {net}).")
                 else:
                     msg, broadcasts = result
                     await reply(msg)
                     await self._deliver_local(broadcasts)
-                    # If on our network, send WHO to capture/update userhost if they're in channel
-                    if net_name.lower() == self.network_name.lower():
+                    # Refresh/capture the userhost via WHO on whichever bot is connected
+                    # to the target network — not just when it happens to be this one.
+                    target_bot = self.find_bot(net_name)
+                    if target_bot and target_bot._connected:
+                        target_bot._pending_forcelogin = (char_nick, irc_nick, target_bot.channel, net_name)
                         await asyncio.sleep(0.5)
-                        await self._raw(f"WHO {irc_nick}")
+                        await target_bot._raw(f"WHO {irc_nick}")
             else:
                 await reply(result)
 
