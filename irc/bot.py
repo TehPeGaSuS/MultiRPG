@@ -174,7 +174,7 @@ class IRCBot:
                                 "UPDATE players SET userhost=? WHERE id=?",
                                 (uh, p["id"]))
                             await self.engine.db.conn.commit()
-                            await self.say(f"✓ {char} userhost captured: {uh}")
+                            await self.say(f"{char} was forcefully logged in from nick {who_nick}")
                         self._pending_forcelogin = None
                         return
                     
