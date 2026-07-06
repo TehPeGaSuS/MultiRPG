@@ -28,6 +28,7 @@ class IRCBot:
         self.broadcast_callback = None   # set by BotManager
         self._prev_online: dict = {}     # userhost -> username for auto-login
         self._auto_logged_in: list = []  # nicks matched during WHO (for 315 summary)
+        self._pending_forcelogin = None  # (char, nick, channel, network) waiting for WHO
 
     async def run(self):
         while True:
@@ -151,6 +152,18 @@ class IRCBot:
                     who_host = parts[5]
                     uh       = f"{who_nick}!{who_user}@{who_host}"
                     uah      = f"{who_user}@{who_host}"
+                    
+                    # Handle pending forcelogin first
+                    if self._pending_forcelogin and who_nick.lower() == self._pending_forcelogin[1].lower():
+                        char, nick, chan, net = self._pending_forcelogin
+                        p = await self.engine.db.get_player_any_network(char)
+                        if p:
+                            await self.engine.db.set_online(p["id"], nick, chan, uh)
+                            await self.say(f"✓ {char} forcefully logged in as {nick} ({uh})")
+                            bcast = broadcast_net(self.network_name, f"{char} has been forcefully logged in from {nick} on {self.network_name}.")
+                            await self._deliver_local([bcast])
+                        self._pending_forcelogin = None
+                        return
                     
                     # Auto-login from _prev_online (reconnect tracking)
                     if self._prev_online:
@@ -517,13 +530,21 @@ class IRCBot:
             
             ok, result = await self.engine.cmd_forcelogin(char_nick, irc_nick, net_name, self.channel, userhost)
             if ok:
-                msg, broadcasts = result
-                await reply(msg)
-                await self._deliver_local(broadcasts)
-                # If on our network, send WHO for this nick to capture/update userhost if they're in channel
-                if net_name.lower() == self.network_name.lower():
-                    await asyncio.sleep(0.5)
-                    await self._raw(f"WHO {irc_nick}")
+                if isinstance(result, tuple) and result[0] == "needs_who":
+                    # Need to capture userhost via WHO
+                    _, target_nick, char, chan, net = result
+                    self._pending_forcelogin = (char, target_nick, chan, net)
+                    await reply(f"{char} will be forcefully logged in as {target_nick} once I capture their userhost...")
+                    if net.lower() == self.network_name.lower():
+                        await self._raw(f"WHO {target_nick}")
+                else:
+                    msg, broadcasts = result
+                    await reply(msg)
+                    await self._deliver_local(broadcasts)
+                    # If on our network, send WHO to capture/update userhost if they're in channel
+                    if net_name.lower() == self.network_name.lower():
+                        await asyncio.sleep(0.5)
+                        await self._raw(f"WHO {irc_nick}")
             else:
                 await reply(result)
 
