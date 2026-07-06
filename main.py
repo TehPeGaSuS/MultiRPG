@@ -33,7 +33,6 @@ port    = 6667
 channel = "#multirpg"
 nick    = "MultiRPG"
 use_ssl = true
-tls_verify = true
 # nickserv_pass = "yourpassword"
 # server_pass   = ""
 
@@ -44,7 +43,6 @@ port    = 6697
 channel = "#multirpg"
 nick    = "MultiRPG"
 use_ssl = true
-tls_verify = true
 
 [web]
 host         = "0.0.0.0"
