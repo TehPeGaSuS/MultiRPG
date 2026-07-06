@@ -553,20 +553,27 @@ class GameEngine:
         if self.hof_type == "cron" and not self._reset_pending:
             from croniter import croniter
             now = int(time.time())
+            
+            # On first check, initialize to the last cron fire time to catch missed fires
             if self._last_cron_check == 0:
-                self._last_cron_check = now
-            cron = croniter(self.round_cron, now - self.self_clock - 1)
-            next_fire = cron.get_next(float)
-            if self._last_cron_check < next_fire <= now and not self._quest["questers"]:
+                cron_init = croniter(self.round_cron, now)
+                self._last_cron_check = cron_init.get_prev(float)
+            
+            # Find the most recent cron fire time
+            cron = croniter(self.round_cron, now)
+            last_fire = cron.get_prev(float)
+            
+            # Check if a new cron event has fired since last check
+            if last_fire > self._last_cron_check and not self._quest["questers"]:
                 self._reset_pending = True
                 self._reset_at      = now + 60
                 round_num           = await self.db.get_round()
-                self._last_cron_check = now
+                self._last_cron_check = last_fire
                 return [broadcast_all(
                     f"⏰ Scheduled end of Round {round_num}! "
                     f"The realm will be reborn in 60 seconds."
                 )]
-            self._last_cron_check = now
+            self._last_cron_check = last_fire
 
         msgs    = []
         online  = await self.db.get_online_players()
