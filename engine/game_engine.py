@@ -945,19 +945,18 @@ class GameEngine:
         scored.sort(key=lambda x: (x[0]["level"], x[1]), reverse=True)
 
         # Record top 3 in HoF
-        medals = ["🥇", "🥈", "🥉"]  # 🥇🥈🥉
-        top3   = scored[:3]
+        top3 = scored[:3]
         for rank, (p, isum) in enumerate(top3, 1):
             await self.db.record_hof(round_num, rank, dict(p), isum)
 
-        # Build winner announcement
-        winner_parts = []
-        for i, (p, isum) in enumerate(top3):
-            winner_parts.append(
-                f"{medals[i]} {p['username']}@{p['network']} "
-                f"(lv.{p['level']}, {p['class']}, items:{isum})"
-            )
-        winners_str = "  ".join(winner_parts)
+        # Build the ranking line from pre-reset levels (top3 dicts predate reset).
+        medals = ["🥇", "🥈", "🥉"]
+        if top3:
+            ranking = ", ".join(
+                f"{medals[i]} {p['username']}@{p['network']} (lv.{p['level']}, {p['class']})"
+                for i, (p, _isum) in enumerate(top3))
+        else:
+            ranking = "no ranked players"
 
         # Clear quest
         self._quest = {"questers": [], "type": 1, "stage": 1,
@@ -965,7 +964,7 @@ class GameEngine:
                        "p1name": "", "p2name": ""}
         await self.db.clear_quest()
 
-        # Reset all players
+        # Reset all players (keeps them logged in; scatters grid positions)
         await self.db.reset_round()
 
         # Clear reset flag
@@ -975,13 +974,30 @@ class GameEngine:
         # so players stay logged in across the reset — re-WHO'ing here would log
         # everyone out/in again and spam "N users automatically logged in".
 
-        msg1 = (f"⚔️ End of Round {round_num}! "
-                f"{winners_str}  "
-                f"The realm has been reborn — Round {round_num + 1} begins now! "
-                f"Your characters have been reset. Keep idling to continue!")
+        # ── Announce to every network/channel ─────────────────────────────────
+        broadcasts = [broadcast_all(
+            f"⚔️ End of Round {round_num}! {ranking} :: "
+            f"The realm has been reborn — Round {round_num + 1} begins now! "
+            f"Your characters have been reset. Keep idling to continue!")]
+
+        # Players are carried into the new round still logged in. Summarise who's
+        # online per network (grouped), mirroring the auto-login summary format.
+        online = await self.db.get_online_players()
+        by_net: dict = {}
+        for p in online:
+            by_net.setdefault(p["network"], []).append(p.get("current_nick") or p["username"])
+        for net in sorted(by_net):
+            nicks = by_net[net]
+            n     = len(nicks)
+            # Each network's login summary goes only to that network's channel.
+            broadcasts.append(broadcast_net(
+                net,
+                f"{n} user{'s' if n != 1 else ''} automatically logged in on {net}. "
+                + ", ".join(nicks)))
+
         await self.db.log_event("system", f"Round {round_num} ended. "
                                 f"Winner: {top3[0][0]['username'] if top3 else 'none'}")
-        return [broadcast_all(msg1)]
+        return broadcasts
 
     async def cmd_forcelogin(self, username: str, nick: str, network: str, channel: str, userhost: str = "") -> tuple:
         """Admin command: Force a character to be logged in with a specific nick on a network.
