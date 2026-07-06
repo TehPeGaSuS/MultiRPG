@@ -411,7 +411,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG FORCEQUEST RELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -476,6 +476,28 @@ class IRCBot:
         elif cmd == "RELOGIN":
             if not await self._is_admin(nick): await reply("Access denied."); return
             await reply(self.engine.cmd_relogin())
+
+        elif cmd == "FORCELOGIN":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            if len(args) < 3:
+                await reply("Usage: FORCELOGIN <character> <nick> <network> [userhost]")
+                await reply("Example: FORCELOGIN Manderz Amanda SwiftIRC")
+                await reply("With userhost: FORCELOGIN Manderz Amanda SwiftIRC Amanda!user@host.com")
+                return
+            
+            char_nick = args[0]
+            irc_nick = args[1]
+            net_name = args[2]
+            userhost = args[3] if len(args) > 3 else ""
+            
+            # If no userhost provided, try to find it by checking if nick is in a player record
+            if not userhost:
+                existing_player = await self.engine.db.get_player_by_nick(irc_nick, net_name)
+                if existing_player and existing_player["userhost"]:
+                    userhost = existing_player["userhost"]
+            
+            ok, msg = await self.engine.cmd_forcelogin(char_nick, irc_nick, net_name, self.channel, userhost)
+            await reply(msg)
 
         elif cmd == "CLEARQ":
             if not await self._is_admin(nick): await reply("Access denied."); return
