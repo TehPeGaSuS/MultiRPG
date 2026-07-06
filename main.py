@@ -33,6 +33,7 @@ port    = 6667
 channel = "#multirpg"
 nick    = "MultiRPG"
 use_ssl = true
+tls_verify = true
 # nickserv_pass = "yourpassword"
 # server_pass   = ""
 
@@ -43,6 +44,7 @@ port    = 6697
 channel = "#multirpg"
 nick    = "MultiRPG"
 use_ssl = true
+tls_verify = true
 
 [web]
 host         = "0.0.0.0"
@@ -139,6 +141,7 @@ async def main():
             nickserv_pass = net.get("nickserv_pass"),
             server_pass   = net.get("server_pass"),
             use_ssl       = bool(net.get("use_ssl", False)),
+            tls_verify    = bool(net.get("tls_verify", True)),
         )
         manager.register(bot)
 
