@@ -456,7 +456,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -521,6 +521,15 @@ class IRCBot:
         elif cmd == "RELOGIN":
             if not await self._is_admin(nick): await reply("Access denied."); return
             await reply(self.engine.cmd_relogin())
+
+        elif cmd == "ENDROUND":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            broadcasts = await self.engine.cmd_endround()
+            if broadcasts:
+                await reply("Round end scheduled — the realm resets in 60 seconds.")
+                await self._deliver_local(broadcasts)
+            else:
+                await reply("A round reset is already in progress.")
 
         elif cmd == "FORCELOGIN":
             if not await self._is_admin(nick): await reply("Access denied."); return
