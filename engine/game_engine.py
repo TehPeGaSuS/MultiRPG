@@ -971,7 +971,9 @@ class GameEngine:
         # Clear reset flag
         self._reset_pending  = False
         self._reset_at       = 0
-        self._post_reset_who = True  # signal bots to re-WHO the channel
+        # NOTE: no post-reset re-WHO. reset_round() now preserves login sessions,
+        # so players stay logged in across the reset — re-WHO'ing here would log
+        # everyone out/in again and spam "N users automatically logged in".
 
         msg1 = (f"⚔️ End of Round {round_num}! "
                 f"{winners_str}  "
