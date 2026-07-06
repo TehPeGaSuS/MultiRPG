@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 class IRCBot:
     def __init__(self, network_name, host, port, channel, nick, engine,
-                 nickserv_pass=None, server_pass=None, use_ssl=False,
+                 nickserv_pass=None, server_pass=None, use_ssl=False, tls_verify=True,
                  reconnect_delay=30, modes="+i"):
         self.network_name    = network_name
         self.host, self.port = host, port
@@ -18,6 +18,7 @@ class IRCBot:
         self.nickserv_pass   = nickserv_pass
         self.server_pass     = server_pass
         self.use_ssl         = use_ssl
+        self.tls_verify      = tls_verify
         self.reconnect_delay = reconnect_delay
         self.modes           = modes
         self._reader         = None
@@ -44,6 +45,9 @@ class IRCBot:
         if self.use_ssl:
             import ssl as _ssl
             ctx = _ssl.create_default_context()
+            if not self.tls_verify:
+                ctx.check_hostname = False
+                ctx.verify_mode = _ssl.CERT_NONE
             self._reader, self._writer = await asyncio.open_connection(
                 self.host, self.port, ssl=ctx)
         else:
@@ -141,24 +145,32 @@ class IRCBot:
 
             # 352 — WHO reply: :server 352 botnick #chan user host server nick H :0 realname
             if cmd2 == "352":
-                if self._prev_online and len(parts) >= 8:
+                if len(parts) >= 8:
                     who_nick = parts[7]
                     who_user = parts[4]
                     who_host = parts[5]
                     uh       = f"{who_nick}!{who_user}@{who_host}"
                     uah      = f"{who_user}@{who_host}"
-                    for saved_uh, uname in list(self._prev_online.items()):
-                        # Support both stored formats: "nick!user@host" and "user@host"
-                        saved_uah = saved_uh.split("!", 1)[1] if "!" in saved_uh else saved_uh
-                        if saved_uah == uah:
-                            p = await self.engine.db.get_player(uname, self.network_name)
-                            if p:
-                                await self.engine.db.set_online(
-                                    p["id"], who_nick, self.channel, uh)
-                                log.info(f"[{self.network_name}] Auto-login: {uname} ({uh})")
-                                self._auto_logged_in.append(who_nick)
-                            del self._prev_online[saved_uh]
-                            break
+                    
+                    # Auto-login from _prev_online (reconnect tracking)
+                    if self._prev_online:
+                        for saved_uh, uname in list(self._prev_online.items()):
+                            saved_uah = saved_uh.split("!", 1)[1] if "!" in saved_uh else saved_uh
+                            if saved_uah == uah:
+                                p = await self.engine.db.get_player(uname, self.network_name)
+                                if p:
+                                    await self.engine.db.set_online(
+                                        p["id"], who_nick, self.channel, uh)
+                                    log.info(f"[{self.network_name}] Auto-login: {uname} ({uh})")
+                                    self._auto_logged_in.append(who_nick)
+                                del self._prev_online[saved_uh]
+                                break
+                    else:
+                        # Update userhost for already-logged-in users (e.g., after forcelogin)
+                        p = await self.engine.db.get_player_by_nick(who_nick, self.network_name)
+                        if p and p["is_online"]:
+                            await self.engine.db.set_online(p["id"], who_nick, self.channel, uh)
+                            log.info(f"[{self.network_name}] Updated userhost for {p['username']}: {uh}")
                 return
 
             # 315 — end of WHO
@@ -256,6 +268,13 @@ class IRCBot:
                         f"as {p['username']}."
                     )
                     await self.voice_user(usernick)
+                    return
+            
+            # ── Update userhost for already-logged-in users (e.g., after forcelogin) ──
+            p = await self.engine.db.get_player_by_nick(usernick, self.network_name)
+            if p and p["is_online"] and uh and "!" in uh:
+                await self.engine.db.set_online(p["id"], usernick, self.channel, uh)
+                log.info(f"[{self.network_name}] Updated userhost for {p['username']}: {uh}")
             return
 
         # Ignore our own messages for all other commands
@@ -496,8 +515,17 @@ class IRCBot:
                 if existing_player and existing_player["userhost"]:
                     userhost = existing_player["userhost"]
             
-            ok, msg = await self.engine.cmd_forcelogin(char_nick, irc_nick, net_name, self.channel, userhost)
-            await reply(msg)
+            ok, result = await self.engine.cmd_forcelogin(char_nick, irc_nick, net_name, self.channel, userhost)
+            if ok:
+                msg, broadcasts = result
+                await reply(msg)
+                await self._deliver_local(broadcasts)
+                # If on our network, send WHO for this nick to capture/update userhost if they're in channel
+                if net_name.lower() == self.network_name.lower():
+                    await asyncio.sleep(0.5)
+                    await self._raw(f"WHO {irc_nick}")
+            else:
+                await reply(result)
 
         elif cmd == "CLEARQ":
             if not await self._is_admin(nick): await reply("Access denied."); return
