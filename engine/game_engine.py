@@ -957,6 +957,30 @@ class GameEngine:
                                 f"Winner: {top3[0][0]['username'] if top3 else 'none'}")
         return [broadcast_all(msg1)]
 
+    async def cmd_forcelogin(self, username: str, nick: str, network: str, channel: str, userhost: str = "") -> tuple:
+        """Admin command: Force a character to be logged in with a specific nick on a network.
+        
+        If userhost is provided (nick!user@host format), uses it for auto-login on reconnect.
+        If not provided, will auto-update on next JOIN from that nick.
+        
+        Returns (ok, message_string).
+        """
+        # Check if character exists
+        p = await self.db.get_player_any_network(username)
+        if not p:
+            return False, f"No character '{username}' exists."
+        
+        # Check if character is already logged in
+        if p["is_online"]:
+            return False, f"{username} is already logged in."
+        
+        # Log them in with userhost (for auto-login on reconnect/netsplit)
+        await self.db.set_online(p["id"], nick, channel, userhost=userhost)
+        msg = f"{username} has been forcefully logged in as {nick}@{network} in {channel}."
+        if userhost:
+            msg += f" (userhost: {userhost})"
+        return True, msg
+
     async def _hand_of_god(self, online) -> list:
         if not online: return []
         p       = random.choice(online)
