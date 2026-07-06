@@ -1,7 +1,7 @@
 """irc/bot.py — IRC adapter. All player commands via PM only."""
 import asyncio, logging
 from typing import Optional
-from engine.game_engine import GameEngine, Broadcast
+from engine.game_engine import GameEngine, Broadcast, broadcast_net
 
 log = logging.getLogger(__name__)
 
