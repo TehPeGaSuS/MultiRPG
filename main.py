@@ -43,6 +43,7 @@ port    = 6697
 channel = "#multirpg"
 nick    = "MultiRPG"
 use_ssl = true
+# tls_verify = false  # Optional, defaults to true (verify certs)
 
 [web]
 host         = "0.0.0.0"
