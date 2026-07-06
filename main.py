@@ -64,6 +64,7 @@ class BotManager:
     def register(self, bot: IRCBot):
         self.bots.append(bot)
         bot.broadcast_callback = self.deliver_all   # cross-network routing
+        bot.manager = self                          # sibling lookup (forcelogin WHO)
     async def deliver_all(self, broadcasts: list[Broadcast]):
         for b in broadcasts:
             for bot in self.bots:
