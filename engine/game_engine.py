@@ -384,6 +384,22 @@ class GameEngine:
         self._relogin_who = True
         return "Re-login WHO sent to all networks."
 
+    async def cmd_endround(self) -> list:
+        """Admin: manually end the current round. Schedules the same 60-second
+        grace + end-of-round reset the automatic HoF paths use, so players are
+        kept logged in and the winners/reset announcement broadcasts to every
+        network. Works regardless of any active quest (the reset clears it)."""
+        if self._reset_pending:
+            return []   # already scheduled — bot replies privately, no channel spam
+        now                 = int(time.time())
+        self._reset_pending = True
+        self._reset_at      = now + 60
+        round_num           = await self.db.get_round()
+        return [broadcast_all(
+            f"⏰ Round {round_num} is being ended by an admin! "
+            f"The realm will be reborn in 60 seconds."
+        )]
+
     async def cmd_forcequest(self) -> list:
         """Admin: force-start a quest immediately, ignoring timer and eligibility."""
         if self._quest["questers"]:
@@ -563,17 +579,25 @@ class GameEngine:
             cron = croniter(self.round_cron, now)
             last_fire = cron.get_prev(float)
             
-            # Check if a new cron event has fired since last check
-            if last_fire > self._last_cron_check and not self._quest["questers"]:
-                self._reset_pending = True
-                self._reset_at      = now + 60
-                round_num           = await self.db.get_round()
+            # Check if a new cron event has fired since last check.
+            # NOTE: only advance _last_cron_check when we actually act on the fire.
+            # If a quest is in progress we must NOT consume it — leave it pending so
+            # the reset triggers on the first tick after the quest ends. (Previously
+            # _last_cron_check was advanced unconditionally, which silently dropped
+            # any boundary that landed during a quest — e.g. the missed Jul 1 reset.)
+            if last_fire > self._last_cron_check:
+                if not self._quest["questers"]:
+                    self._reset_pending = True
+                    self._reset_at      = now + 60
+                    round_num           = await self.db.get_round()
+                    self._last_cron_check = last_fire
+                    return [broadcast_all(
+                        f"⏰ Scheduled end of Round {round_num}! "
+                        f"The realm will be reborn in 60 seconds."
+                    )]
+                # else: quest active — keep _last_cron_check behind so we retry later.
+            else:
                 self._last_cron_check = last_fire
-                return [broadcast_all(
-                    f"⏰ Scheduled end of Round {round_num}! "
-                    f"The realm will be reborn in 60 seconds."
-                )]
-            self._last_cron_check = last_fire
 
         msgs    = []
         online  = await self.db.get_online_players()
