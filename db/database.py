@@ -87,7 +87,9 @@ class Database:
 
     async def reset_round(self):
         """Reset all player stats for a new round. Preserve username, password,
-        network, is_admin. Wipe level, TTL, items, penalties, position."""
+        network, is_admin. Wipe level, TTL, items, penalties, position.
+        Login session (is_online, current_nick, online_since, userhost, channel)
+        is preserved so players stay logged in across the reset and keep idling."""
         now = int(__import__('time').time())
         await self.conn.execute("""
             UPDATE players SET
@@ -95,8 +97,7 @@ class Database:
                 pos_x=0, pos_y=0, alignment='n',
                 pen_mesg=0, pen_nick=0, pen_part=0,
                 pen_kick=0, pen_quit=0, pen_quest=0, pen_logout=0,
-                idled=0, is_online=0, current_nick=NULL,
-                online_since=NULL, last_login=?
+                idled=0, last_login=?
             """, (now,))
         await self.conn.execute("DELETE FROM items")
         await self.conn.execute("UPDATE game_state SET round=round+1, reset_at=? WHERE id=1", (now,))
