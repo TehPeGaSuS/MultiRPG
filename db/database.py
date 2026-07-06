@@ -91,10 +91,14 @@ class Database:
         Login session (is_online, current_nick, online_since, userhost, channel)
         is preserved so players stay logged in across the reset and keep idling."""
         now = int(__import__('time').time())
+        # Scatter players to random grid positions (0..499, matching MAP_X/MAP_Y
+        # and new-player placement). abs(random())%500 evaluates per-row, so each
+        # player lands on a different tile — otherwise everyone stacks on (0,0)
+        # and the collision-battle logic fires a fight every tick.
         await self.conn.execute("""
             UPDATE players SET
                 level=0, ttl=600, next_ttl=600,
-                pos_x=0, pos_y=0, alignment='n',
+                pos_x=abs(random())%500, pos_y=abs(random())%500, alignment='n',
                 pen_mesg=0, pen_nick=0, pen_part=0,
                 pen_kick=0, pen_quit=0, pen_quest=0, pen_logout=0,
                 idled=0, last_login=?
