@@ -158,10 +158,12 @@ class IRCBot:
                         char, nick, chan, net = self._pending_forcelogin
                         p = await self.engine.db.get_player_any_network(char)
                         if p:
-                            await self.engine.db.set_online(p["id"], nick, chan, uh)
-                            await self.say(f"✓ {char} forcefully logged in as {nick} ({uh})")
-                            bcast = broadcast_net(self.network_name, f"{char} has been forcefully logged in from {nick} on {self.network_name}.")
-                            await self._deliver_local([bcast])
+                            # Update userhost for the already-logged-in user
+                            await self.engine.db.conn.execute(
+                                "UPDATE players SET userhost=? WHERE id=?",
+                                (uh, p["id"]))
+                            await self.engine.db.conn.commit()
+                            await self.say(f"✓ {char} userhost captured: {uh}")
                         self._pending_forcelogin = None
                         return
                     
@@ -533,10 +535,20 @@ class IRCBot:
                 if isinstance(result, tuple) and result[0] == "needs_who":
                     # Need to capture userhost via WHO
                     _, target_nick, char, chan, net = result
+                    # Set online immediately, then try to capture userhost via WHO
+                    p = await self.engine.db.get_player_any_network(char)
+                    if p:
+                        await self.engine.db.set_online(p["id"], target_nick, chan, userhost="")
+                        bcast = broadcast_net(net, f"{char} has been forcefully logged in from {target_nick} on {net}.")
+                        await self._deliver_local([bcast])
                     self._pending_forcelogin = (char, target_nick, chan, net)
-                    await reply(f"{char} will be forcefully logged in as {target_nick} once I capture their userhost...")
+                    await reply(f"{char} will be forcefully logged in as {target_nick}. Searching for userhost...")
+                    # Send WHO to capture userhost if available
                     if net.lower() == self.network_name.lower():
                         await self._raw(f"WHO {target_nick}")
+                    else:
+                        # Different network - log a warning but don't fail
+                        await reply(f"Note: {target_nick}'s userhost could not be captured (not on this network)")
                 else:
                     msg, broadcasts = result
                     await reply(msg)
