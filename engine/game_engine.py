@@ -950,10 +950,12 @@ class GameEngine:
             await self.db.record_hof(round_num, rank, dict(p), isum)
 
         # Build the ranking line from pre-reset levels (top3 dicts predate reset).
-        medals = ["🥇", "🥈", "🥉"]
+        # Use plain "#1/#2/#3" — NOT medal emojis. UnrealIRCd's antimixedutf8
+        # module blocks messages with several emojis, so keep at most the one
+        # leading ⚔️ in the announcement below.
         if top3:
             ranking = ", ".join(
-                f"{medals[i]} {p['username']}@{p['network']} (lv.{p['level']}, {p['class']})"
+                f"#{i + 1} - {p['username']}@{p['network']} (lv.{p['level']}, {p['class']})"
                 for i, (p, _isum) in enumerate(top3))
         else:
             ranking = "no ranked players"
