@@ -960,26 +960,34 @@ class GameEngine:
     async def cmd_forcelogin(self, username: str, nick: str, network: str, channel: str, userhost: str = "") -> tuple:
         """Admin command: Force a character to be logged in with a specific nick on a network.
         
-        If userhost is provided (nick!user@host format), uses it for auto-login on reconnect.
-        If not provided, will auto-update on next JOIN from that nick.
+        If user is already logged in, updates their nick/userhost.
+        If userhost not provided, returns (ok, needs_who) to signal bot to capture via WHO.
         
-        Returns (ok, message_string).
+        Returns (ok, (message_string, broadcasts)) or (ok, "needs_who") to wait for userhost.
         """
         # Check if character exists
         p = await self.db.get_player_any_network(username)
         if not p:
             return False, f"No character '{username}' exists."
         
-        # Check if character is already logged in
-        if p["is_online"]:
-            return False, f"{username} is already logged in."
+        # If no userhost provided, preserve existing one or mark as needing WHO
+        if not userhost and p.get("userhost"):
+            userhost = p["userhost"]
+        elif not userhost:
+            # Will capture via WHO - return special signal
+            return True, ("needs_who", nick, username, channel, network)
         
-        # Log them in with userhost (for auto-login on reconnect/netsplit)
+        # Log them in with userhost (updates if already online)
         await self.db.set_online(p["id"], nick, channel, userhost=userhost)
+        
         msg = f"{username} has been forcefully logged in as {nick}@{network} in {channel}."
         if userhost:
             msg += f" (userhost: {userhost})"
-        return True, msg
+        
+        # Broadcast to the network
+        bcast = broadcast_net(network, f"{username} has been forcefully logged in from {nick} on {network}.")
+        
+        return True, (msg, [bcast])
 
     async def _hand_of_god(self, online) -> list:
         if not online: return []
