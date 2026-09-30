@@ -1104,6 +1104,8 @@ tr:last-child th,tr:last-child td{border-bottom:none}
 """
 
     px, py = p["pos_x"], p["pos_y"]
+    # JSON string literal for the map label; '<' escaped so it can't close the <script>
+    lbl_js = json.dumps(p["username"]).replace("<", "\\u003c")
 
     body = f"""<div class="pw">
   <div class="pname">{escape(p['username'])}</div>
@@ -1182,7 +1184,7 @@ ctx.fillStyle='#ff99ee';ctx.fill();
 ctx.strokeStyle='#ff44cc';ctx.lineWidth=1.5;ctx.stroke();
 
 // Name label — large, readable, with background box
-const lbl={json.dumps(p['username']).replace('<', '\\u003c')};
+const lbl={lbl_js};
 ctx.font='bold 16px sans-serif';
 ctx.textAlign='center';
 const lw=ctx.measureText(lbl).width;
