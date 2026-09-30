@@ -234,8 +234,10 @@ class GameEngine:
             if not p:
                 return False, "No such account. Use REGISTER to create one."
             # Allow login from any network
-        if p["password_hash"] != self.db.hash_password(password):
+        if not self.db.verify_password(password, p["password_hash"]):
             return False, "Wrong password."
+        if self.db.needs_rehash(p["password_hash"]):
+            await self.db.change_password(p["id"], password)
         if p["is_online"]:
             return False, "You are already logged in."
         await self.db.set_online(p["id"], nick, channel, userhost)

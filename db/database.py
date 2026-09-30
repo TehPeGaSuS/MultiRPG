@@ -1,5 +1,5 @@
 """db/database.py — All SQL lives here."""
-import hashlib, random, time
+import hashlib, hmac, os, random, time
 from pathlib import Path
 from typing import Optional
 import aiosqlite
@@ -31,7 +31,24 @@ class Database:
 
     @staticmethod
     def hash_password(pw: str) -> str:
-        return hashlib.sha256(pw.encode()).hexdigest()
+        """Salted scrypt, stored as 'scrypt$<salt hex>$<hash hex>'."""
+        salt = os.urandom(16)
+        dk = hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1)
+        return f"scrypt${salt.hex()}${dk.hex()}"
+
+    @staticmethod
+    def verify_password(pw: str, stored: str) -> bool:
+        if stored.startswith("scrypt$"):
+            _, salt, digest = stored.split("$")
+            dk = hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1)
+            return hmac.compare_digest(dk.hex(), digest)
+        # Legacy unsalted SHA-256 hash (upgraded on next successful login)
+        legacy = hashlib.sha256(pw.encode()).hexdigest()  # lgtm[py/weak-sensitive-data-hashing]
+        return hmac.compare_digest(legacy, stored)
+
+    @staticmethod
+    def needs_rehash(stored: str) -> bool:
+        return not stored.startswith("scrypt$")
 
     # ── Players ───────────────────────────────────────────────────────────────
 

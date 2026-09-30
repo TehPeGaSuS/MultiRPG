@@ -1,5 +1,6 @@
 """web/app.py — Leaderboard, live world map, and game info page."""
 import json, time, collections
+from html import escape
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
@@ -202,6 +203,7 @@ tr:last-child td{border-bottom:none}
   <tbody id="lb-body"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Loading...</td></tr></tbody>
 </table></div></div>
 <script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const AMAP = {g:'good', e:'evil', n:'neutral'};
 function fmtTTL(s) {
   s = Math.abs(Math.round(s));
@@ -216,10 +218,10 @@ async function refreshLeaderboard() {
     const tbody = document.getElementById('lb-body');
     tbody.innerHTML = players.map(p => `
       <tr>
-        <td>${p.is_online ? '🟢' : '⚫'} <a href="/player/${p.username}">${p.username}</a></td>
-        <td>${p.network}</td>
+        <td>${p.is_online ? '🟢' : '⚫'} <a href="/player/${encodeURIComponent(p.username)}">${esc(p.username)}</a></td>
+        <td>${esc(p.network)}</td>
         <td>${p.level}</td>
-        <td>${p.char_class}</td>
+        <td>${esc(p.char_class)}</td>
         <td>${AMAP[p.alignment] || 'neutral'}</td>
         <td>${fmtTTL(p.ttl)}</td>
         <td>${p.item_sum}</td>
@@ -319,6 +321,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
 </div>
 <div id="tooltip"></div>
 <script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
 const canvas    = document.getElementById('map');
 const ctx       = canvas.getContext('2d');
 const W = 500, H = 500;
@@ -398,13 +401,13 @@ canvas.addEventListener('mousemove', e => {{
   const hit    = players.find(p => Math.hypot(p.x - mx, p.y - my) < 8);
   const region = regionAt(mx, my);
   const locLine = region
-    ? `<span class="region-name">${{region}}</span>`
+    ? `<span class="region-name">${{esc(region)}}</span>`
     : `<b>[${{Math.round(mx)}}, ${{Math.round(my)}}]</b>`;
 
   if (hit) {{
     hoverEl.innerHTML =
-      `<b>${{hit.username}}</b> @${{hit.network}}<br>` +
-      `Lv.${{hit.level}} ${{hit.char_class}}<br>` +
+      `<b>${{esc(hit.username)}}</b> @${{esc(hit.network)}}<br>` +
+      `Lv.${{hit.level}} ${{esc(hit.char_class)}}<br>` +
       `[${{hit.x}}, ${{hit.y}}] · ${{hit.is_online ? '🟢' : '🔴'}}<br>` +
       locLine;
     tooltip.style.cssText = `display:block;left:${{e.clientX+14}}px;top:${{e.clientY-10}}px`;
@@ -837,6 +840,7 @@ async def handle_quest(req):
   </div>
 </div>
 <script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fmtTime(s) {
   if (s <= 0) return '00:00:00';
   const d = Math.floor(s / 86400);
@@ -881,7 +885,7 @@ function renderQuest(q) {
         <b>Stage</b><span>${q.stage} of 2</span>
       </div>
       <div class="meta-item">
-        <b>Destination</b><span>${destName}</span>
+        <b>Destination</b><span>${esc(destName)}</span>
       </div>`;
   }
 
@@ -889,8 +893,8 @@ function renderQuest(q) {
     <div class="quester">
       <div class="quester-num">${i+1}</div>
       <div class="quester-info">
-        <b>${p.username}<span class="tag">${p.network}</span></b>
-        <span>Level ${p.level} ${p.char_class}${q.type==='grid' ? ` · [${p.x}, ${p.y}]` : ''}</span>
+        <b>${esc(p.username)}<span class="tag">${esc(p.network)}</span></b>
+        <span>Level ${p.level} ${esc(p.char_class)}${q.type==='grid' ? ` · [${p.x}, ${p.y}]` : ''}</span>
       </div>
     </div>`).join('');
 
@@ -898,7 +902,7 @@ function renderQuest(q) {
     <div class="quest-card">
       <div class="quest-header">
         <h2>⚔ Active Quest</h2>
-        <p>To ${questText}.</p>
+        <p>To ${esc(questText)}.</p>
       </div>
       <div class="quest-meta">${metaHtml}</div>
       <div class="questers">
@@ -1030,7 +1034,7 @@ async def handle_player(req):
     username = req.match_info["username"]
     p        = await db.get_player_any_network(username)
     if not p:
-        body = f'<div class="container" style="padding:2rem"><p>Player <b>{username}</b> not found. <a href="/" style="color:var(--gold)">Back to leaderboard</a></p></div>'
+        body = f'<div class="container" style="padding:2rem"><p>Player <b>{escape(username)}</b> not found. <a href="/" style="color:var(--gold)">Back to leaderboard</a></p></div>'
         return web.Response(text=page("Not Found", body, show_hof=_show_hof(req)), content_type="text/html")
 
     items  = {r["slot"]: r for r in await db.get_items(p["id"])}
@@ -1062,7 +1066,7 @@ async def handle_player(req):
         label = SLOT_LABEL.get(slot, slot.title())
         if not r or r["level"] == 0:
             return f'<tr><th>{label}</th><td class="muted">—</td></tr>'
-        name  = f' <span class="iname">({r["name"]})</span>' if r.get("name") else ""
+        name  = f' <span class="iname">({escape(str(r["name"]))})</span>' if r.get("name") else ""
         return f'<tr><th>{label}</th><td><span class="ilvl">{r["level"]}</span>{name}</td></tr>'
 
     def pen_row(label, val):
@@ -1102,19 +1106,19 @@ tr:last-child th,tr:last-child td{border-bottom:none}
     px, py = p["pos_x"], p["pos_y"]
 
     body = f"""<div class="pw">
-  <div class="pname">{p['username']}</div>
-  <div class="psub">{p['class']} &middot; {p['network']}</div>
+  <div class="pname">{escape(p['username'])}</div>
+  <div class="psub">{escape(p['class'])} &middot; {escape(p['network'])}</div>
 
   <div class="ptop">
     <div class="card">
       <div class="ct">Character</div>
       <table>
-        {row('User', p['username'])}
-        {row('Class', p['class'])}
+        {row('User', escape(p['username']))}
+        {row('Class', escape(p['class']))}
         {row('Level', p['level'])}
         {row('Next Level', fmt_ttl(p['ttl']))}
         {row('Status', '<span class="' + ('online' if p['is_online'] else 'offline') + '">' + status + '</span>')}
-        {row('Host', '<span style="font-size:0.78rem;word-break:break-all">' + (p['userhost'] or '—') + '</span>')}
+        {row('Host', '<span style="font-size:0.78rem;word-break:break-all">' + escape(p['userhost'] or '—') + '</span>')}
         {row('Account Created', fmt_ts(p['created_at']))}
         {row('Last Login', fmt_ts(p['last_login']))}
         {row('Total Idled', fmt_ttl(p['idled']))}
@@ -1178,7 +1182,7 @@ ctx.fillStyle='#ff99ee';ctx.fill();
 ctx.strokeStyle='#ff44cc';ctx.lineWidth=1.5;ctx.stroke();
 
 // Name label — large, readable, with background box
-const lbl='{p['username']}';
+const lbl={json.dumps(p['username']).replace('<', '\\u003c')};
 ctx.font='bold 16px sans-serif';
 ctx.textAlign='center';
 const lw=ctx.measureText(lbl).width;
@@ -1193,7 +1197,7 @@ ctx.fillText(lbl,lx,ly);
 </script>
 """
 
-    return web.Response(text=page(f"{p['username']} — Profile", body, css, show_hof=_show_hof(req)),
+    return web.Response(text=page(f"{escape(p['username'])} — Profile", body, css, show_hof=_show_hof(req)),
                         content_type="text/html")
 
 
@@ -1286,8 +1290,8 @@ async def handle_hof(req):
                 body_parts.append(f'''<div class="hof-card">
   <div class="medal">{medal}</div>
   <div>
-    <div class="hof-name">{w['username']}</div>
-    <div class="hof-detail">{w['class']} · {w['network']} · Level {w['level']} · Item Sum {w['item_sum']}</div>
+    <div class="hof-name">{escape(w['username'])}</div>
+    <div class="hof-detail">{escape(w['class'])} · {escape(w['network'])} · Level {w['level']} · Item Sum {w['item_sum']}</div>
   </div>
   <div class="hof-meta">{date}</div>
 </div>''')
