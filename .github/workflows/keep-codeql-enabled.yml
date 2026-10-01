@@ -1,0 +1,19 @@
+# GitHub disables scheduled workflows in public repos after 60 days without
+# repository activity. A push-triggered workflow is not affected by that, so
+# use it to re-enable CodeQL whenever someone pushes.
+name: Keep CodeQL enabled
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  actions: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow enable codeql.yml --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
