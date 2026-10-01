@@ -92,6 +92,13 @@ Rename a character. The new name must not already be taken across any network. U
 /msg MultiRPG CHUSER PotHead HighPotHead
 ```
 
+### `DEL <username>`
+Permanently delete a player's account (character, items and all). Admin accounts are refused — run `DELADMIN` first. If the player is on an active quest, the quest is cancelled without penalties for the other questers. The channels are told the account was removed.
+
+```
+/msg MultiRPG DEL PotHead
+```
+
 ### `DELOLD <days>`
 Remove all accounts that have not been online in the last `<days>` days. Useful for periodic cleanup.
 
@@ -139,4 +146,4 @@ Revoke admin privileges from a character.
 - There is no `PEVAL` command — use direct DB access (`sqlite3 multirpg.db`) for bulk operations.
 - There is no `DIE` or `RESTART` command — use your process manager (systemd, screen, etc.) or Ctrl+C.
 - Database backups: use `sqlite3 multirpg.db ".backup multirpg.db.bak"` (the database runs in WAL mode, so a plain `cp` can miss recent writes) or set up a cron job. No bot command needed.
-- To delete an account an admin must use `DELOLD <days>` for long-idle ones, or direct DB access; players can remove their own with `REMOVEME`.
+- Players can delete their own account with `REMOVEME`; admins can use `DEL <username>`, or `DELOLD <days>` for long-idle ones.

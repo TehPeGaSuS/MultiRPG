@@ -193,7 +193,7 @@ All commands are sent via **private message** to the bot. Talking in the channel
 
 See [ADMIN.md](ADMIN.md) for the full reference. Quick list:
 
-`HOG` `FORCEQUEST` `ENDROUND` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>` `RELOGIN` `FORCELOGIN <character> <nick> <network> [userhost]`
+`HOG` `FORCEQUEST` `ENDROUND` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>` `RELOGIN` `FORCELOGIN <character> <nick> <network> [userhost]`
 
 To make yourself admin, first register a character, then run directly against the database:
 ```bash

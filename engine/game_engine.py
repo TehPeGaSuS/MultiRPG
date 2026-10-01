@@ -482,6 +482,26 @@ class GameEngine:
                 [broadcast_all(f"{nick} removed their account, "
                                f"{utag(p)}, the {p['class']}.")])
 
+    async def cmd_del(self, admin_nick, target) -> tuple:
+        """Admin: permanently delete a player's account."""
+        p = await self.db.get_player_any_network(target)
+        if not p: return f"No such username {target}.", []
+        if p["is_admin"]:
+            return (f"{p['username']} is an admin. Run DELADMIN {p['username']} "
+                    "first if you really want to delete it."), []
+        broadcasts = [broadcast_all(f"{utag(p)}'s account was removed by an admin.")]
+        q = self._quest
+        if any(x["id"] == p["id"] for x in q["questers"]):
+            # A quester is gone: cancel the quest quietly (no penalties for the
+            # others, it isn't their doing) and delay the next one.
+            q["questers"] = []
+            q["qtime"]    = int(time.time()) + 43200
+            await self.db.clear_quest()
+            broadcasts.append(broadcast_all(
+                f"The quest has been cancelled because {utag(p)}'s account was removed."))
+        await self.db.delete_player(p["id"])
+        return f"Account {p['username']} deleted.", broadcasts
+
     async def cmd_push(self, admin_nick, network, target, seconds) -> tuple:
         p = await self.db.get_player_any_network(target)
         if not p: return f"No such username {target}.", []

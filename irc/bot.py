@@ -456,7 +456,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DEL DELOLD MKADMIN DELADMIN",
             ]: await reply(line)
 
         # ── Admin ─────────────────────────────────────────────────────────────
@@ -483,6 +483,13 @@ class IRCBot:
             if not await self._is_admin(nick): await reply("Access denied."); return
             if len(args) < 2: await reply("Usage: CHCLASS <username> <class>"); return
             await reply(await self.engine.cmd_chclass(args[0], " ".join(args[1:])))
+
+        elif cmd == "DEL":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            if not args: await reply("Usage: DEL <username>"); return
+            msg, broadcasts = await self.engine.cmd_del(nick, args[0])
+            await reply(msg)
+            await self._deliver_local(broadcasts)
 
         elif cmd == "DELOLD":
             if not await self._is_admin(nick): await reply("Access denied."); return
