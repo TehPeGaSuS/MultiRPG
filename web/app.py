@@ -442,7 +442,7 @@ setInterval(fetchPlayers, 5000);
 async def handle_info(req):
     engine   = req.app.get("engine")
     rp_base  = engine.rp_base  if engine and hasattr(engine, "rp_base")  else 600
-    rp_step  = engine.rp_step  if engine and hasattr(engine, "rp_step")  else 1.21
+    rp_step  = engine.rp_step  if engine and hasattr(engine, "rp_step")  else 1.16
     win_level = engine.win_level if engine and hasattr(engine, "win_level") else 40
     css = """
 .info{max-width:820px;margin:2rem auto;padding:0 1.5rem 3rem}
