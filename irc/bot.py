@@ -385,10 +385,11 @@ class IRCBot:
         elif cmd == "LOGIN":
             if len(args) < 2:
                 await reply("Usage: LOGIN <username> <password>"); return
-            ok, msg = await self.engine.on_login(
+            ok, msg, broadcasts = await self.engine.on_login(
                 args[0], self.network_name, nick, self.channel,
                 args[1], userhost=userhost)
             await reply(msg)
+            await self._deliver_local(broadcasts)
             if ok:
                 await self.voice_user(nick)
 

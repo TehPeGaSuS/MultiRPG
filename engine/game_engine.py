@@ -227,24 +227,31 @@ class GameEngine:
 
     async def on_login(self, username, network, nick, channel,
                        password, userhost="") -> tuple:
+        """Returns (ok, private_msg, [Broadcast]). Only a successful login is
+        announced; failures and "already logged in" stay private."""
         p = await self.db.get_player(username, network)
         if not p:
             # Try any network — usernames are globally unique
             p = await self.db.get_player_any_network(username)
             if not p:
-                return False, "No such account. Use REGISTER to create one."
+                return False, "No such account. Use REGISTER to create one.", []
             # Allow login from any network
         if not self.db.verify_password(password, p["password_hash"]):
-            return False, "Wrong password."
+            return False, "Wrong password.", []
         if self.db.needs_rehash(p["password_hash"]):
             await self.db.change_password(p["id"], password)
         if p["is_online"]:
-            return False, "You are already logged in."
+            return False, "You are already logged in.", []
         await self.db.set_online(p["id"], nick, channel, userhost)
-        return True, (
+        priv = (
             f"Logon successful. {username}, the level {p['level']} "
             f"{p['class']}. Next level in {fmt_time(p['ttl'])}."
         )
+        chan = broadcast_all(
+            f"{utag(p)}, the level {p['level']} {p['class']}, is now online "
+            f"from nickname {nick}. Next level in {fmt_time(p['ttl'])}."
+        )
+        return True, priv, [chan]
 
     async def on_register(self, username, network, nick, channel,
                           password, char_class, userhost="") -> tuple:
