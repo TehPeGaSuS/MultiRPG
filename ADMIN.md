@@ -93,7 +93,7 @@ Rename a character. The new name must not already be taken across any network. U
 ```
 
 ### `DEL <username>`
-Permanently delete a player's account (character, items and all). Admin accounts are refused — run `DELADMIN` first. If the player is on an active quest, the quest is cancelled without penalties for the other questers. The channels are told the account was removed.
+Permanently delete a player's account (character, items and all). Admin accounts are refused — run `DELADMIN` first. If the player is on an active quest, they are removed from it and the quest carries on with the remaining questers (no penalties); it is cancelled only if nobody is left. The channels are told the account was removed and who is still on the quest.
 
 ```
 /msg MultiRPG DEL PotHead

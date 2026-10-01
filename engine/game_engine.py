@@ -489,16 +489,26 @@ class GameEngine:
         if p["is_admin"]:
             return (f"{p['username']} is an admin. Run DELADMIN {p['username']} "
                     "first if you really want to delete it."), []
-        broadcasts = [broadcast_all(f"{utag(p)}'s account was removed by an admin.")]
+        removed = f"{utag(p)}'s account was removed by an admin."
         q = self._quest
         if any(x["id"] == p["id"] for x in q["questers"]):
-            # A quester is gone: cancel the quest quietly (no penalties for the
-            # others, it isn't their doing) and delay the next one.
-            q["questers"] = []
-            q["qtime"]    = int(time.time()) + 43200
-            await self.db.clear_quest()
-            broadcasts.append(broadcast_all(
-                f"The quest has been cancelled because {utag(p)}'s account was removed."))
+            # A quester is gone. It isn't the others' doing, so no penalties:
+            # the quest carries on with whoever is left, and is only cancelled
+            # (and the next one delayed) when nobody is.
+            q["questers"] = [x for x in q["questers"] if x["id"] != p["id"]]
+            what = f"The quest to {q['text']}" if q.get("text") else "The quest"
+            if q["questers"]:
+                await self.db.save_quest(q)
+                n     = len(q["questers"])
+                names = ", ".join(f"{x['username']}@{x['network']}" for x in q["questers"])
+                msg   = f"{removed} {what} now has {n} quester{'s' if n != 1 else ''}: {names}."
+            else:
+                q["qtime"] = int(time.time()) + 43200
+                await self.db.clear_quest()
+                msg = f"{removed} {what} has been cancelled, since no questers are left."
+            broadcasts = [broadcast_all(msg)]
+        else:
+            broadcasts = [broadcast_all(removed)]
         await self.db.delete_player(p["id"])
         return f"Account {p['username']} deleted.", broadcasts
 

@@ -741,8 +741,9 @@ The player will need to log in again with the new name.</p>
 
 <h3>DEL &lt;username&gt;</h3>
 <p>Permanently delete a player's account. Admin accounts are refused (run
-<code>DELADMIN</code> first). If the player is on an active quest, the quest is cancelled
-without penalties for the other questers.</p>
+<code>DELADMIN</code> first). If the player is on an active quest, they are removed from it and
+the quest carries on with the remaining questers (no penalties); it is cancelled only if nobody
+is left. The channels are told who is still on the quest.</p>
 <pre>/msg MultiRPG DEL PotHead</pre>
 
 <h3>DELOLD &lt;days&gt;</h3>
