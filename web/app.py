@@ -1258,6 +1258,7 @@ async def handle_hof(req):
                 padding:1rem 1.2rem;margin-bottom:1.5rem;font-family:'Cinzel',serif;
                 color:var(--muted);font-size:0.85rem;letter-spacing:0.08em}
 .current-round span{color:var(--gold);font-size:1.1rem}
+.rank-note{color:var(--muted);font-size:0.8rem;margin:-0.8rem 0 1.5rem;font-style:italic}
 .empty{color:var(--muted);font-style:italic;padding:2rem;text-align:center}
 """
 
@@ -1272,6 +1273,10 @@ async def handle_hof(req):
     body_parts = [f'<div class="hof">']
     body_parts.append(
         f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
+    if rounds:
+        body_parts.append(
+            '<p class="rank-note">Winners are ranked by level; ties go to the player '
+            'with the least time left to the next level.</p>')
 
     if not rounds:
         if hof_type == "cron" and round_cron:

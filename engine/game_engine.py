@@ -935,12 +935,13 @@ class GameEngine:
         round_num   = await self.db.get_round()
         all_players = await self.db.get_all_players()
 
-        # Score each player: (level, item_sum)
+        # Rank like the rest of the game (leaderboard, "Top Players"): highest
+        # level first, ties broken by the least time left to the next level.
         scored = []
         for p in all_players:
             isum = await self.db.get_item_sum(p["id"])
             scored.append((p, isum))
-        scored.sort(key=lambda x: (x[0]["level"], x[1]), reverse=True)
+        scored.sort(key=lambda x: (-x[0]["level"], x[0]["ttl"]))
 
         # Record top 3 in HoF
         top3 = scored[:3]

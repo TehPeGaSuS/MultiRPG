@@ -23,7 +23,7 @@ Force-start a quest immediately, ignoring the quest timer and eligibility checks
 > **Note:** Regular users can use `QUEST` to check active quest status. `FORCEQUEST` is the admin-only command to force-start one.
 
 ### `ENDROUND`
-Manually end the current round. Announces a 60-second warning to every network, then runs the normal end-of-round reset: the top 3 are recorded in the Hall of Fame, winners are broadcast to all channels, and every player's stats (level, TTL, items, penalties, position) are wiped for the new round. Players are **kept logged in** and keep idling — no re-login needed. Works even while a quest is active (the reset clears it).
+Manually end the current round. Announces a 60-second warning to every network, then runs the normal end-of-round reset: the top 3 (highest level, ties broken by the least time to the next level — the same order as the leaderboard) are recorded in the Hall of Fame, winners are broadcast to all channels, and every player's stats (level, TTL, items, penalties, position) are wiped for the new round. Players are **kept logged in** and keep idling — no re-login needed. Works even while a quest is active (the reset clears it).
 
 ```
 /msg MultiRPG ENDROUND
