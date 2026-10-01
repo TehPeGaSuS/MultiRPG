@@ -9,6 +9,7 @@ from pathlib import Path
 from db.database import Database
 from engine.game_engine import GameEngine, Broadcast
 from irc.bot import IRCBot
+from version import __version__, REPO_URL
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
@@ -96,6 +97,7 @@ async def game_tick_loop(engine, manager, self_clock):
         await asyncio.sleep(self_clock)
 
 async def main():
+    log.info(f"MultiRPG v{__version__} ({REPO_URL})")
     config     = load_config()
     db         = Database(DB_PATH)
     await db.connect()
@@ -163,7 +165,7 @@ async def main():
 
     tasks = ([asyncio.create_task(bot.run(), name=f"irc-{bot.network_name}") for bot in manager.bots]
              + [asyncio.create_task(game_tick_loop(engine, manager, self_clock), name="game-tick")])
-    log.info(f"Multi IdleRPG running on {len(manager.bots)} network(s), self_clock={self_clock}s")
+    log.info(f"Multi IdleRPG v{__version__} running on {len(manager.bots)} network(s), self_clock={self_clock}s")
     if getattr(engine, '_startup_broadcasts', None):
         await asyncio.sleep(5)  # give bots a moment to connect
         await manager.deliver_all(engine._startup_broadcasts)

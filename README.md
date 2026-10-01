@@ -137,6 +137,12 @@ A bot that is down when a scheduled round end passes does not make it up when it
 
 ---
 
+## Versioning
+
+The version lives in `version.py` (`__version__`). It is shown in the footer of every web page and logged when the bot starts. When releasing, bump it and tag the commit to match (`git tag v1.0.1`).
+
+---
+
 ## Web Interface
 
 | URL | Description |

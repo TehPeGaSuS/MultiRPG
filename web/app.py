@@ -4,6 +4,7 @@ from html import escape
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
+from version import __version__, REPO_URL
 
 # ── Real IP (Cloudflare tunnel forwards CF-Connecting-IP) ─────────────────────
 def get_ip(req) -> str:
@@ -116,6 +117,10 @@ nav a{color:var(--muted);text-decoration:none;padding:0.25rem 0.7rem;
        transition:color 0.2s;white-space:nowrap}
 nav a:hover{color:var(--gold)}
 .container{max-width:1100px;margin:2rem auto;padding:0 1.5rem}
+footer{text-align:center;padding:1.6rem 1rem 2.2rem;color:var(--muted);font-size:0.78rem;
+        border-top:1px solid var(--border);margin-top:2rem}
+footer a{color:var(--muted);text-decoration:underline}
+footer a:hover{color:var(--gold)}
 """
 
 def page(title, body, extra_css="", extra_head="", show_hof=True):
@@ -126,6 +131,7 @@ def page(title, body, extra_css="", extra_head="", show_hof=True):
 <header><h1>⚔ Multi IdleRPG ⚔</h1><p>The ancient art of doing absolutely nothing</p></header>
 {make_nav(show_hof)}
 {body}
+<footer>Running MultiRPG v{__version__} :: Source: <a href="{REPO_URL}" rel="noopener">{REPO_URL}</a></footer>
 </body></html>"""
 
 def _show_hof(req) -> bool:
