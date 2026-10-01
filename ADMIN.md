@@ -29,7 +29,7 @@ Manually end the current round. Announces a 60-second warning to every network, 
 /msg MultiRPG ENDROUND
 ```
 
-> Use this to run a round reset that was missed (e.g. a scheduled `hof_type = "cron"` boundary that passed while a quest was active, or while the bot was down). Regardless of `hof_type`, this forces a reset on demand.
+> Use this to run a round reset that was missed (e.g. a scheduled `hof_type = "cron"` boundary that passed while the bot was down). Regardless of `hof_type`, this forces a reset on demand.
 
 ### `PAUSE`
 Toggle pause mode. When paused, the tick loop stops completely — no TTL countdown, no events, no movement. Use before maintenance. Run again to resume.

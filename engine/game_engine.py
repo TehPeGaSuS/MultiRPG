@@ -581,25 +581,21 @@ class GameEngine:
             cron = croniter(self.round_cron, now)
             last_fire = cron.get_prev(float)
             
-            # Check if a new cron event has fired since last check.
-            # NOTE: only advance _last_cron_check when we actually act on the fire.
-            # If a quest is in progress we must NOT consume it — leave it pending so
-            # the reset triggers on the first tick after the quest ends. (Previously
-            # _last_cron_check was advanced unconditionally, which silently dropped
-            # any boundary that landed during a quest — e.g. the missed Jul 1 reset.)
+            # Check if a new cron event has fired since last check. The scheduled
+            # boundary always wins: an active quest does not defer it (the reset
+            # clears the quest anyway), so rounds end on the date they should.
             if last_fire > self._last_cron_check:
-                if not self._quest["questers"]:
-                    self._reset_pending = True
-                    self._reset_at      = now + 60
-                    round_num           = await self.db.get_round()
-                    self._last_cron_check = last_fire
-                    return [broadcast_all(
-                        f"⏰ Scheduled end of Round {round_num}! "
-                        f"The realm will be reborn in 60 seconds."
-                    )]
-                # else: quest active — keep _last_cron_check behind so we retry later.
-            else:
+                quest_active = bool(self._quest["questers"])
+                self._reset_pending = True
+                self._reset_at      = now + 60
+                round_num           = await self.db.get_round()
                 self._last_cron_check = last_fire
+                note = " The active quest will be cancelled." if quest_active else ""
+                return [broadcast_all(
+                    f"⏰ Scheduled end of Round {round_num}! "
+                    f"The realm will be reborn in 60 seconds.{note}"
+                )]
+            self._last_cron_check = last_fire
 
         msgs    = []
         online  = await self.db.get_online_players()
