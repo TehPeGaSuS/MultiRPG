@@ -2,6 +2,8 @@
 import asyncio, logging
 from typing import Optional
 from engine.game_engine import GameEngine, Broadcast, broadcast_net
+from version import __version__, REPO_URL
+import updatecheck
 
 log = logging.getLogger(__name__)
 
@@ -452,12 +454,17 @@ class IRCBot:
                 "  WHOAMI                                   — Short status",
                 "  QUEST                                    — Active quest info",
                 "  TOP                                      — Top 5 players",
+                "  VERSION                                  — Show the bot version",
                 "  NEWPASS <password>                       — Change password",
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
                 "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DEL DELOLD MKADMIN DELADMIN",
+                f"Running MultiRPG v{__version__} :: Source: {REPO_URL}",
             ]: await reply(line)
+
+        elif cmd == "VERSION":
+            await reply(updatecheck.describe(__version__, await updatecheck.latest_version()))
 
         # ── Admin ─────────────────────────────────────────────────────────────
 

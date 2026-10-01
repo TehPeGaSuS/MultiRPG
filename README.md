@@ -180,6 +180,7 @@ All commands are sent via **private message** to the bot. Talking in the channel
 | `STATUS [username]` | Full stats for yourself or another player. |
 | `QUEST` | Active quest info. |
 | `TOP` | Top 5 players by level. |
+| `VERSION` | The running version, the Python version, and the newest version in Git (looked up on GitHub, cached for 6 hours; skipped if GitHub can't be reached). |
 | `HELP` | Full command list. |
 
 ### Penalties
