@@ -92,13 +92,6 @@ Rename a character. The new name must not already be taken across any network. U
 /msg MultiRPG CHUSER PotHead HighPotHead
 ```
 
-### `DEL <username>`
-Delete a player's account permanently.
-
-```
-/msg MultiRPG DEL PotHead
-```
-
 ### `DELOLD <days>`
 Remove all accounts that have not been online in the last `<days>` days. Useful for periodic cleanup.
 
@@ -109,6 +102,20 @@ Remove all accounts that have not been online in the last `<days>` days. Useful 
 ---
 
 ## Admin Management
+
+### `RELOGIN`
+Re-run the channel WHO on every network and log back in anyone who was online and is still in the channel. Use it if players were logged out unexpectedly.
+
+```
+/msg MultiRPG RELOGIN
+```
+
+### `FORCELOGIN <character> <nick> <network> [userhost]`
+Log a character in as the given IRC nick, without their password. If you leave out the userhost, the bot looks it up with WHO.
+
+```
+/msg MultiRPG FORCELOGIN Manderz Amanda SwiftIRC
+```
 
 ### `MKADMIN <username>`
 Grant admin privileges to a character. The character must already exist.
@@ -131,4 +138,5 @@ Revoke admin privileges from a character.
 - Admin status is tied to a **character name**, not an IRC nick. If a player renames their character (CHUSER) they retain admin status.
 - There is no `PEVAL` command — use direct DB access (`sqlite3 multirpg.db`) for bulk operations.
 - There is no `DIE` or `RESTART` command — use your process manager (systemd, screen, etc.) or Ctrl+C.
-- Database backups: just `cp multirpg.db multirpg.db.bak` or set up a cron job. No bot command needed.
+- Database backups: use `sqlite3 multirpg.db ".backup multirpg.db.bak"` (the database runs in WAL mode, so a plain `cp` can miss recent writes) or set up a cron job. No bot command needed.
+- To delete an account an admin must use `DELOLD <days>` for long-idle ones, or direct DB access; players can remove their own with `REMOVEME`.

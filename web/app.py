@@ -702,6 +702,23 @@ Run again to resume. Use before maintenance or when investigating issues.</p>
 or a runaway event.</p>
 <pre>/msg MultiRPG CLEARQ</pre>
 
+<h3>ENDROUND — End the Round Now</h3>
+<p>Announces a 60-second warning on every network, then ends the round: the top 3
+(highest level, ties broken by the least time to the next level) go into the Hall of Fame
+and every character is reset. Players stay logged in. Works even while a quest is active
+(the reset cancels it).</p>
+<pre>/msg MultiRPG ENDROUND</pre>
+
+<h3>RELOGIN — Restore Logins</h3>
+<p>Re-runs the channel WHO on every network and logs back in anyone who was online and is
+still in the channel.</p>
+<pre>/msg MultiRPG RELOGIN</pre>
+
+<h3>FORCELOGIN &lt;character&gt; &lt;nick&gt; &lt;network&gt; [userhost]</h3>
+<p>Logs a character in as the given IRC nick without their password. If the userhost is
+left out, the bot looks it up with WHO.</p>
+<pre>/msg MultiRPG FORCELOGIN Manderz Amanda SwiftIRC</pre>
+
 <h2>Player Management</h2>
 
 <h3>PUSH &lt;username&gt; &lt;seconds&gt;</h3>
@@ -721,10 +738,6 @@ Use to correct erroneous penalties. Negative values add time.</p>
 <p>Rename a character. The new name must not already exist on any network.
 The player will need to log in again with the new name.</p>
 <pre>/msg MultiRPG CHUSER PotHead HighPotHead</pre>
-
-<h3>DEL &lt;username&gt;</h3>
-<p>Permanently delete a player's account.</p>
-<pre>/msg MultiRPG DEL PotHead</pre>
 
 <h3>DELOLD &lt;days&gt;</h3>
 <p>Remove all accounts not logged in within the last <code>&lt;days&gt;</code> days.</p>
@@ -747,7 +760,7 @@ The player will need to log in again with the new name.</p>
   No <code>PEVAL</code>, <code>DIE</code>, or <code>RESTART</code> commands exist.
   Use <code>sqlite3 multirpg.db</code> for bulk DB operations and your
   process manager (systemd, screen, etc.) to control the bot process.<br><br>
-  For backups: <code>cp multipg.db multirpg.db.bak</code> or a cron job.
+  For backups use <code>sqlite3 multirpg.db ".backup multirpg.db.bak"</code> (the database runs in WAL mode, so a plain <code>cp</code> can miss recent writes) or a cron job.
 </div>
 
 </div>"""
