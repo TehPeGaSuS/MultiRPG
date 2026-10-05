@@ -21,7 +21,17 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(SCHEMA_PATH.read_text())
+        await self.ensure_item_rows()
         await self._conn.commit()
+
+    async def ensure_item_rows(self):
+        """Every player must own one row per slot (set_item/steal_item only
+        UPDATE). Backfill any that are missing, e.g. after an old reset that
+        deleted the rows."""
+        await self._conn.executemany(
+            "INSERT OR IGNORE INTO items(player_id,slot,level) "
+            "SELECT id, ?, 0 FROM players",
+            [(slot,) for slot in ITEM_SLOTS])
 
     async def close(self):
         if self._conn: await self._conn.close()
@@ -121,7 +131,9 @@ class Database:
                 pen_kick=0, pen_quit=0, pen_quest=0, pen_logout=0,
                 idled=0
             """)
-        await self.conn.execute("DELETE FROM items")
+        # Zero the rows rather than deleting them: set_item/steal_item only
+        # UPDATE, so a player without rows could never hold an item again.
+        await self.conn.execute("UPDATE items SET level=0, name=NULL, is_unique=0")
         await self.conn.execute("UPDATE game_state SET round=round+1, reset_at=? WHERE id=1", (now,))
         await self.conn.commit()
 
