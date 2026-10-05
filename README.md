@@ -2,6 +2,18 @@
 
 ---
 
+> [!WARNING]
+> **Item bug in 1.0.0 (fixed in 1.0.1).** A round reset (`ENDROUND` / the automatic reset) deleted every player's item rows instead of zeroing them. Items are only created at registration, so after a reset existing players could not hold items any more: "You found a level X ..." was announced but nothing was saved, and their item sum stayed at 0. Only players registered after the reset were unaffected.
+>
+> **To fix an affected database:**
+> 1. Update to 1.0.1 and restart the bot. On start it recreates any missing item rows.
+> 2. Optional, one time: if you want everyone to start level with the current highest item sum, back up and run [`equalize_items.sql`](equalize_items.sql):
+>    ```
+>    sqlite3 multirpg.db ".backup multirpg.db.bak"
+>    sqlite3 multirpg.db < equalize_items.sql
+>    ```
+>    It copies the top player's per-slot item levels to everyone (unique-item names are cleared). Items lost in the reset cannot be recovered.
+
 # ⚔ Multi IdleRPG ⚔
 
 An idle RPG for IRC, written in Python. You register a character, then play by doing absolutely nothing: levels come from idling, and talking, parting, quitting or changing your nick sets you back.
