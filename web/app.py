@@ -69,7 +69,6 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     app["db"] = db
     app["engine"] = engine
     app["networks"] = networks or []
-    app["hof_type"] = engine.hof_type if engine else "level"
     app.router.add_get("/",            handle_index)
     app.router.add_get("/favicon.svg",   handle_favicon)
     app.router.add_get("/map",         handle_map)
@@ -78,8 +77,7 @@ def create_app(db: Database, engine=None, networks=None, web_cfg=None) -> web.Ap
     app.router.add_get("/quest",       handle_quest)
     app.router.add_get("/player/{username}", handle_player)
     app.router.add_get("/play",        handle_play)
-    if (engine and engine.hof_type != "none"):
-        app.router.add_get("/hof",         handle_hof)
+    app.router.add_get("/hof",         handle_hof)
     app.router.add_get("/api/quest",   handle_api_quest)
     app.router.add_get("/api/players", handle_api_players)
     app.router.add_get("/api/events",  handle_api_events)
@@ -134,10 +132,6 @@ def page(title, body, extra_css="", extra_head="", show_hof=True):
 {body}
 <footer>Running MultiRPG v{__version__} :: Source: <a href="{REPO_URL}" rel="noopener">{REPO_URL}</a></footer>
 </body></html>"""
-
-def _show_hof(req) -> bool:
-    """Return True if HoF is enabled (not hof_type=none)."""
-    return req.app.get("hof_type", "level") != "none"
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
@@ -240,7 +234,7 @@ async function refreshLeaderboard() {
 refreshLeaderboard();
 setInterval(refreshLeaderboard, 10000);
 </script>"""
-    return web.Response(text=page("Leaderboard", body, css, show_hof=_show_hof(req)),
+    return web.Response(text=page("Leaderboard", body, css),
         content_type="text/html")
 
 # ── World Map ─────────────────────────────────────────────────────────────────
@@ -418,7 +412,7 @@ fetchPlayers();
 setInterval(fetchPlayers, 5000);
 </script>"""
 
-    return web.Response(text=page("World Map", body, css, show_hof=_show_hof(req)), content_type="text/html")
+    return web.Response(text=page("World Map", body, css), content_type="text/html")
 
 # ── Game Info ─────────────────────────────────────────────────────────────────
 # Faithful reproduction of the original idlerpg.net/info.php page,
@@ -627,7 +621,7 @@ challenger's old item is given to the loser in a moment of pity.</p>
 honouring the original game logic as closely as possible.</p>
 
 </div>"""
-    return web.Response(text=page("Game Info", body, css, show_hof=_show_hof(req)), content_type="text/html")
+    return web.Response(text=page("Game Info", body, css), content_type="text/html")
 
 
 # ── Admin Commands page ───────────────────────────────────────────────────────
@@ -761,7 +755,7 @@ is left. The channels are told who is still on the quest.</p>
 </div>
 
 </div>"""
-    return web.Response(text=page("Admin Commands", body, css, show_hof=_show_hof(req)), content_type="text/html")
+    return web.Response(text=page("Admin Commands", body, css), content_type="text/html")
 
 
 # ── Quest API ─────────────────────────────────────────────────────────────────
@@ -946,7 +940,7 @@ fetchQuest();
 setInterval(fetchQuest, 15000);
 </script>"""
 
-    return web.Response(text=page("Quest", body, css, show_hof=_show_hof(req)),
+    return web.Response(text=page("Quest", body, css),
                         content_type="text/html")
 
 
@@ -1021,7 +1015,7 @@ async def handle_play(req):
   Example: Type <code>"/msg {networks[0].get("nick","MultiRPG") if networks else "MultiRPG"} HELP"</code> to get started.</p>
 </div>"""
 
-    return web.Response(text=page("Where to Play", body, css, show_hof=_show_hof(req)),
+    return web.Response(text=page("Where to Play", body, css),
                         content_type="text/html")
 
 
@@ -1045,7 +1039,7 @@ async def handle_player(req):
     p        = await db.get_player_any_network(username)
     if not p:
         body = f'<div class="container" style="padding:2rem"><p>Player <b>{escape(username)}</b> not found. <a href="/" style="color:var(--gold)">Back to leaderboard</a></p></div>'
-        return web.Response(text=page("Not Found", body, show_hof=_show_hof(req)), content_type="text/html")
+        return web.Response(text=page("Not Found", body), content_type="text/html")
 
     items  = {r["slot"]: r for r in await db.get_items(p["id"])}
     isum   = sum(r["level"] for r in items.values())
@@ -1212,7 +1206,7 @@ ctx.fillText(lbl,lx,ly);
 </script>
 """
 
-    return web.Response(text=page(f"{escape(p['username'])} — Profile", body, css, show_hof=_show_hof(req)),
+    return web.Response(text=page(f"{escape(p['username'])} — Profile", body, css),
                         content_type="text/html")
 
 
@@ -1241,6 +1235,17 @@ def _next_cron_str(expr: str) -> str:
         return nxt.strftime("%-d %B %Y") + " at " + time_str
     except Exception:
         return expr
+
+
+def _next_reset_date(expr: str):
+    """Next fire of a cron expression as DD/MM/YYYY (UTC), or None if it can't be worked out."""
+    try:
+        from croniter import croniter
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
+        return croniter(expr, now).get_next(_dt.datetime).strftime("%d/%m/%Y")
+    except Exception:
+        return None
 
 
 async def handle_hof(req):
@@ -1284,14 +1289,23 @@ async def handle_hof(req):
         rounds[r].append(e)
 
     body_parts = [f'<div class="hof">']
-    body_parts.append(
-        f'<div class="current-round">Currently on <span>Round {current_round}</span></div>')
+    if hof_type == "none":
+        status = "Hall of Fame disabled due to continuous game play setting."
+    else:
+        status = f"Currently on <span>Round {current_round}</span>"
+        if hof_type == "cron" and round_cron:
+            reset_date = _next_reset_date(round_cron)
+            if reset_date:
+                status += f" &nbsp;·&nbsp; Next reset on {reset_date}"
+        elif hof_type == "level":
+            status += f" &nbsp;·&nbsp; Next reset when someone reaches level {win_level}"
+    body_parts.append(f'<div class="current-round">{status}</div>')
     if rounds:
         body_parts.append(
             '<p class="rank-note">Winners are ranked by level; ties go to the player '
             'with the least time left to the next level.</p>')
 
-    if not rounds:
+    if not rounds and hof_type != "none":
         if hof_type == "cron" and round_cron:
             schedule = _next_cron_str(round_cron)
             empty_msg = f"No completed rounds yet — the next round starts on {schedule}."
@@ -1318,5 +1332,5 @@ async def handle_hof(req):
             body_parts.append('</div>')
 
     body_parts.append('</div>')
-    return web.Response(text=page("Hall of Fame", '\n'.join(body_parts), css, show_hof=True),
+    return web.Response(text=page("Hall of Fame", '\n'.join(body_parts), css),
                         content_type="text/html")
