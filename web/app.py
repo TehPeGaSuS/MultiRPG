@@ -4,6 +4,7 @@ from html import escape
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
+from engine.locations import LOCATIONS
 from version import __version__, REPO_URL
 
 # ── Real IP (Cloudflare tunnel forwards CF-Connecting-IP) ─────────────────────
@@ -177,7 +178,7 @@ async def handle_index(req):
     for p in players:
         isum   = await db.get_item_sum(p["id"])
         amap   = {"g": "good", "e": "evil", "n": "neutral"}
-        status = "🟢" if p["is_online"] else "⚫"
+        status = "🔵" if p["is_online"] else "🔴"
         s      = abs(int(p["ttl"]))
         d, s   = divmod(s, 86400); h, s = divmod(s, 3600); m, s = divmod(s, 60)
         ttl_s  = f"{d}d {h:02d}:{m:02d}:{s:02d}"
@@ -200,8 +201,10 @@ td a{color:var(--text);text-decoration:none;border-bottom:1px solid var(--border
 td a:hover{color:var(--gold);border-bottom-color:var(--gold)}
 td a:visited{color:var(--muted)}
 tr:last-child td{border-bottom:none}
+.lb-legend{color:var(--muted);font-size:0.82rem;margin:0 0 0.6rem}
 """
-    body = """<div class="container"><div class="table-wrap"><table id="lb">
+    body = """<div class="container"><p class="lb-legend">[offline users are red, online users are blue]</p>
+<div class="table-wrap"><table id="lb">
   <thead><tr>
     <th>Player</th><th>Network</th><th>Level</th><th>Class</th>
     <th>Alignment</th><th>Next Level</th><th>Item Sum</th>
@@ -224,7 +227,7 @@ async function refreshLeaderboard() {
     const tbody = document.getElementById('lb-body');
     tbody.innerHTML = players.map(p => `
       <tr>
-        <td>${p.is_online ? '🟢' : '⚫'} <a href="/player/${encodeURIComponent(p.username)}">${esc(p.username)}</a></td>
+        <td>${p.is_online ? '🔵' : '🔴'} <a href="/player/${encodeURIComponent(p.username)}">${esc(p.username)}</a></td>
         <td>${esc(p.network)}</td>
         <td>${p.level}</td>
         <td>${esc(p.char_class)}</td>
@@ -242,40 +245,12 @@ setInterval(refreshLeaderboard, 10000);
 
 # ── World Map ─────────────────────────────────────────────────────────────────
 
-# Original IdleRPG map region labels (from res0 & Jeb's basemap.png).
-# The basemap is 500x500. These coords place labels at the visual centre of
-# each region as they appear on the original basemap, reproduced faithfully.
-# 4x4 invisible grid zones — each cell is 125x125px on the 500x500 world map
-# Geography-matched pirate names, pins nudged off-grid for organic feel
-GRID_ZONES = [
-    "The Roaring Swell",  "Deadman's Cove",    "Serpent's Current", "Whaler's Notch",
-    "Kraken Deep",        "Smuggler's Run",     "Mermaid's Lagoon",  "Freeport",
-    "Cutthroat Cove",     "The Howling Gale",   "Marauder's Bay",    "The Devil's Passage",
-    "The Abyssal Plain",  "The Frozen South",   "Antarctica's Edge", "The Endless Deep",
-]
-
-# Pin positions — nudged off cell-center for organic feel (matches rendered map)
-GRID_PINS = [
-    ( 54,  72), (193,  70), (307,  74), (446,  68),
-    ( 72, 180), (180, 196), (320, 179), (428, 194),
-    ( 69, 302), (179, 320), (321, 306), (430, 321),
-    ( 70, 429), (181, 444), (319, 428), (428, 445),
-]
-
-MAP_REGIONS = [
-    [GRID_ZONES[i], GRID_PINS[i][0], GRID_PINS[i][1], "region"]
-    for i in range(16)
-]
-
-def nearest_landmark(x, y):
-    col = min(int(x // 125), 3)
-    row = min(int(y // 125), 3)
-    return GRID_ZONES[row * 4 + col]
+# Place names live in engine/locations.py. Hovering names the nearest place,
+# so the zones are irregular (Voronoi) cells rather than a fixed grid.
 
 
 async def handle_map(req):
-    regions_js    = json.dumps(MAP_REGIONS)
-    grid_zones_js = json.dumps(GRID_ZONES)
+    locations_js  = json.dumps(LOCATIONS)
     current_round = await req.app["db"].get_round()
     css = """
 body{overflow:hidden;height:100vh;display:flex;flex-direction:column}
@@ -296,12 +271,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
 #hover-info .region-name{color:var(--gold);font-style:italic;font-family:'Cinzel',serif;font-size:0.8rem}
 #status-bar{font-family:'Cinzel',serif;font-size:0.68rem;color:#6a5030;letter-spacing:0.08em;
              text-align:center;margin-top:auto;padding-top:0.5rem;border-top:1px solid var(--border)}
-#legend{font-size:0.82rem;line-height:2.3}
-.legend-row{display:flex;align-items:center;gap:0.5rem}
-.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
-.dot-on{background:#ff44cc;box-shadow:0 0 6px #ff44cc}
-.dot-off{background:#cc2222;box-shadow:0 0 3px #cc2222}
-.dot-off{background:#dc2828;box-shadow:0 0 8px rgba(220,40,40,0.8)}
+#legend{font-size:0.82rem;line-height:1.6;color:#a08050}
 #tooltip{position:fixed;background:rgba(13,10,6,0.95);border:1px solid var(--border);
           color:var(--text);padding:0.25rem 0.55rem;border-radius:3px;font-size:0.75rem;
           pointer-events:none;display:none;z-index:100;font-family:'Cinzel',serif;
@@ -317,10 +287,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
     </div>
     <div>
       <h3>Legend</h3>
-      <div id="legend">
-        <div class="legend-row"><span class="dot dot-on"></span> Online player</div>
-        <div class="legend-row"><span class="dot dot-off"></span> Offline player</div>
-      </div>
+      <div id="legend">[offline users are red, online users are blue]</div>
     </div>
     <div id="status-bar">Round {current_round} — Loading…</div>
   </div>
@@ -333,9 +300,8 @@ const ctx       = canvas.getContext('2d');
 const W = 500, H = 500;
 let players = [];
 
-// ── Region data ─────────────────────────────────────────────────────────────
-const REGIONS = {regions_js};
-const GRID_ZONES = {grid_zones_js};
+// ── Place data ──────────────────────────────────────────────────────────────
+const LOCATIONS = {locations_js};
 
 // ── Load map image as background ──────────────────────────────────────────────
 const off = document.createElement('canvas'); off.width=W; off.height=H;
@@ -351,7 +317,7 @@ let drawReady = false;
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function drawDot(ctx, x, y, online) {{
-  const color  = online ? [255, 68, 204] : [220, 40, 40];
+  const color  = online ? [40, 110, 255] : [220, 40, 40];
   const [r,g,b] = color;
   const outerR = online ? 12 : 10;
   const innerR = online ? 4.5 : 3.5;
@@ -364,7 +330,7 @@ function drawDot(ctx, x, y, online) {{
   // Inner dot
   ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI*2);
   ctx.fillStyle = `rgba(${{r}},${{g}},${{b}},0.95)`; ctx.fill();
-  ctx.strokeStyle = online ? '#ff44cc' : '#ff2020';
+  ctx.strokeStyle = online ? '#2a6eff' : '#ff2020';
   ctx.lineWidth = 1; ctx.stroke();
 }}
 
@@ -388,12 +354,14 @@ async function fetchPlayers() {{
   }} catch(e) {{ document.getElementById('status-bar').textContent = 'Connection error'; }}
 }}
 
-// ── Grid-based zone lookup — always returns a zone name ──────────────────────
-const CELL = 500 / 4;
+// ── Nearest-place lookup — always returns a place name ───────────────────────
 function regionAt(mx, my) {{
-  const col = Math.min(Math.floor(mx / CELL), 3);
-  const row = Math.min(Math.floor(my / CELL), 3);
-  return GRID_ZONES[row * 4 + col] || null;
+  let best = null, bd = Infinity;
+  for (const [name, x, y] of LOCATIONS) {{
+    const d = (x - mx) ** 2 + (y - my) ** 2;
+    if (d < bd) {{ bd = d; best = name; }}
+  }}
+  return best;
 }}
 
 // ── Hover ─────────────────────────────────────────────────────────────────────
@@ -414,7 +382,7 @@ canvas.addEventListener('mousemove', e => {{
     hoverEl.innerHTML =
       `<b>${{esc(hit.username)}}</b> @${{esc(hit.network)}}<br>` +
       `Lv.${{hit.level}} ${{esc(hit.char_class)}}<br>` +
-      `[${{hit.x}}, ${{hit.y}}] · ${{hit.is_online ? '🟢' : '🔴'}}<br>` +
+      `[${{hit.x}}, ${{hit.y}}] · ${{hit.is_online ? '🔵' : '🔴'}}<br>` +
       locLine;
     tooltip.style.cssText = `display:block;left:${{e.clientX+14}}px;top:${{e.clientY-10}}px`;
     tooltip.textContent = `${{hit.username}} lv.${{hit.level}}`;
@@ -637,8 +605,7 @@ of the loser's items — but only if the loser's item of that type is higher lev
 challenger's old item is given to the loser in a moment of pity.</p>
 
 <h2>Credits</h2>
-<p>Idle RPG was created by <strong>jotun</strong>. Original map by <strong>res0</strong>
-and <strong>Jeb</strong>.</p>
+<p>Idle RPG was created by <strong>jotun</strong>. Although the original map was developed by <strong>res0</strong> and <strong>Jeb</strong>, we use our own custom-made, pirate-themed map.</p>
 <p>This pirate-themed multi-network Python implementation was built from scratch,
 honouring the original game logic as closely as possible.</p>
 
@@ -1118,7 +1085,7 @@ th{font-size:0.78rem;color:var(--muted);text-align:left;padding:0.38rem 1rem;
 td{font-size:0.86rem;color:var(--text);padding:0.38rem 1rem;
     border-bottom:1px solid var(--border);word-break:break-all}
 tr:last-child th,tr:last-child td{border-bottom:none}
-.online{color:#4caf6e}.offline{color:#cf6060}
+.online{color:#4f8bff}.offline{color:#cf6060}
 .ilvl{color:#d4b86a;font-family:monospace;margin-right:0.4rem;font-weight:600}
 .iname{color:var(--muted);font-style:italic;font-size:0.8rem}
 .muted{color:#3d4455;font-style:italic}
@@ -1132,6 +1099,9 @@ tr:last-child th,tr:last-child td{border-bottom:none}
     px, py = p["pos_x"], p["pos_y"]
     # JSON string literal for the map label; '<' escaped so it can't close the <script>
     lbl_js = json.dumps(p["username"]).replace("<", "\\u003c")
+    # same colours as the world map: online blue, offline red
+    dot_rgb, dot_hex, dot_fill = (("40,110,255", "#2a6eff", "#9cc0ff") if p["is_online"]
+                                  else ("220,40,40", "#ff2020", "#ff9999"))
 
     body = f"""<div class="pw">
   <div class="pname">{escape(p['username'])}</div>
@@ -1199,15 +1169,15 @@ mapImg.onload = () => {{
 }};
 
 function drawDot() {{
-// Player dot — glowing magenta
+// Player dot — blue if online, red if offline
 const g2=ctx.createRadialGradient(PX,PY,0,PX,PY,12);
-g2.addColorStop(0,'rgba(255,68,204,0.85)');
-g2.addColorStop(1,'rgba(255,68,204,0)');
+g2.addColorStop(0,'rgba({dot_rgb},0.85)');
+g2.addColorStop(1,'rgba({dot_rgb},0)');
 ctx.beginPath();ctx.arc(PX,PY,12,0,Math.PI*2);
 ctx.fillStyle=g2;ctx.fill();
 ctx.beginPath();ctx.arc(PX,PY,4,0,Math.PI*2);
-ctx.fillStyle='#ff99ee';ctx.fill();
-ctx.strokeStyle='#ff44cc';ctx.lineWidth=1.5;ctx.stroke();
+ctx.fillStyle='{dot_fill}';ctx.fill();
+ctx.strokeStyle='{dot_hex}';ctx.lineWidth=1.5;ctx.stroke();
 
 // Name label — large, readable, with background box
 const lbl={lbl_js};

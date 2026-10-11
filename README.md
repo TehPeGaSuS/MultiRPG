@@ -223,5 +223,5 @@ sqlite3 multirpg.db "UPDATE players SET is_admin=1 WHERE username='YourName';"
 
 ## Credits
 
-Game design by **jotun**. Original map by **res0** and **Jeb**.  
+Game design by **jotun**. Although the original map was developed by **res0** and **Jeb**, we use our own custom-made, pirate-themed map.  
 The bot began as a Python port of IdleRPG 3.0 and has since been extended well beyond it.

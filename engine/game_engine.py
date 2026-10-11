@@ -4,6 +4,7 @@ import logging, random, time
 from dataclasses import dataclass
 from typing import Optional
 from db.database import Database, ITEM_SLOTS
+from engine.locations import LOCATIONS
 
 log = logging.getLogger(__name__)
 
@@ -424,27 +425,9 @@ class GameEngine:
         questers = random.sample(online, min(4, len(online)))
         self._quest["questers"] = questers
         names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
-        LANDMARKS = [
-            ("The Roaring Swell",   54,  72),
-            ("Deadman's Cove",     193,  70),
-            ("Serpent's Current",  307,  74),
-            ("Whaler's Notch",     446,  68),
-            ("Kraken Deep",         72, 180),
-            ("Smuggler's Run",     180, 196),
-            ("Mermaid's Lagoon",   320, 179),
-            ("Freeport",           428, 194),
-            ("Cutthroat Cove",      69, 302),
-            ("The Howling Gale",   179, 320),
-            ("Marauder's Bay",     321, 306),
-            ("The Devil's Passage",430, 321),
-            ("The Abyssal Plain",   70, 429),
-            ("The Frozen South",   181, 444),
-            ("Antarctica's Edge",  319, 428),
-            ("The Endless Deep",   428, 445),
-        ]
         avg_x     = sum(q["pos_x"] for q in questers) // len(questers)
         avg_y     = sum(q["pos_y"] for q in questers) // len(questers)
-        lm_sorted = sorted(LANDMARKS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
+        lm_sorted = sorted(LOCATIONS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
         lm_pool   = lm_sorted[:max(4, len(lm_sorted)//2)]
         lm1, lm2  = random.sample(lm_pool, 2)
         self._quest["type"]   = 2
@@ -895,24 +878,6 @@ class GameEngine:
         questers = random.sample(eligible, 4)
         self._quest["questers"] = questers
         names = ", ".join(f"{q['username']}@{q['network']}" for q in questers)
-        LANDMARKS = [
-            ("The Roaring Swell",   54,  72),
-            ("Deadman's Cove",     193,  70),
-            ("Serpent's Current",  307,  74),
-            ("Whaler's Notch",     446,  68),
-            ("Kraken Deep",         72, 180),
-            ("Smuggler's Run",     180, 196),
-            ("Mermaid's Lagoon",   320, 179),
-            ("Freeport",           428, 194),
-            ("Cutthroat Cove",      69, 302),
-            ("The Howling Gale",   179, 320),
-            ("Marauder's Bay",     321, 306),
-            ("The Devil's Passage",430, 321),
-            ("The Abyssal Plain",   70, 429),
-            ("The Frozen South",   181, 444),
-            ("Antarctica's Edge",  319, 428),
-            ("The Endless Deep",   428, 445),
-        ]
         QUESTS = [
             ("Q1", "sail through the Roaring Swell and survive the tempest unscathed"),
             ("Q1", "retrieve the cursed treasure chest from Deadman's Cove before the tide turns"),
@@ -946,7 +911,7 @@ class GameEngine:
             self._quest["stage"]  = 1
             avg_x = sum(q["pos_x"] for q in questers) // len(questers)
             avg_y = sum(q["pos_y"] for q in questers) // len(questers)
-            lm_sorted = sorted(LANDMARKS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
+            lm_sorted = sorted(LOCATIONS, key=lambda l: (l[1]-avg_x)**2+(l[2]-avg_y)**2)
             lm_pool   = lm_sorted[:max(4, len(lm_sorted)//2)]
             lm1, lm2  = random.sample(lm_pool, 2)
             self._quest["p1"]     = (lm1[1], lm1[2])
