@@ -13,6 +13,11 @@ RP_BASE, RP_STEP     = 600, 1.16   # IdleRPG 3.0 defaults: TTL = 600 * 1.16^leve
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
 
 
+def _sentence(text: str) -> str:
+    """Upper-case the first letter only (str.capitalize() lower-cases place names)."""
+    return text[:1].upper() + text[1:]
+
+
 def base_ttl(level: int) -> int:
     if level > 60:
         return int(RP_BASE * (RP_STEP ** 60) + 86400 * (level - 60))
@@ -441,7 +446,7 @@ class GameEngine:
             f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
             for q in questers)
         msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
-        msg2 = (f"⚓ QUEST: {self._quest['text'].capitalize()}. "
+        msg2 = (f"⚓ QUEST: {_sentence(self._quest['text'])}. "
                 f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
                 f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
         msg = f"{msg1} {msg2}"
@@ -881,14 +886,23 @@ class GameEngine:
         QUESTS = [
             ("Q1", "sail through the Roaring Swell and survive the tempest unscathed"),
             ("Q1", "retrieve the cursed treasure chest from Deadman's Cove before the tide turns"),
-            ("Q1", "escort the merchant fleet safely past Shipwreck Reef to Freeport"),
+            ("Q1", "escort the merchant fleet safely past Wreckers' Shoals to Freeport"),
             ("Q1", "break the sea witch's curse haunting the waters of Mermaid's Lagoon"),
-            ("Q1", "defend Port Royal from the incoming pirate armada until dawn"),
+            ("Q1", "defend Freeport from the incoming pirate armada until dawn"),
             ("Q1", "recover the Pirate King's stolen crown from Blackbeard's Cove"),
             ("Q1", "navigate the Serpent's Current and chart a safe passage for the fleet"),
             ("Q1", "rescue the prisoners held captive at Gallows Reef before high tide"),
             ("Q1", "destroy the kraken's eggs hidden in the depths of Kraken Deep"),
             ("Q1", "barter passage through Cutthroat Cove without firing a single shot"),
+            ("Q1", "smuggle a hold of contraband rum through Smuggler's Run without alerting the navy"),
+            ("Q1", "steal the harpoons of the whaling fleet at Whaler's Notch before the hunt begins"),
+            ("Q1", "thread the fleet through The Devil's Passage before the tide closes the channel"),
+            ("Q1", "ride out the storm in The Howling Gale and bring every ship home"),
+            ("Q1", "ambush the rival crew hiding in Marauder's Bay and seize their plunder"),
+            ("Q1", "lower the diving bell into The Abyssal Plain and recover the sunken galleon's gold"),
+            ("Q1", "recover the cursed skull from the peak of Bonecrown Isle before it wakes the dead"),
+            ("Q1", "chart the hidden channels of Tempest Archipelago before the next storm hits"),
+            ("Q1", "answer the ghostly distress call drifting across The Endless Deep"),
             ("Q2", "brave the open seas to reach the lost ruins"),
             ("Q2", "chart the treacherous waters between two pirate strongholds"),
             ("Q2", "deliver the sealed orders across enemy-controlled waters"),
@@ -904,7 +918,7 @@ class GameEngine:
                 f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
                 for q in questers)
             msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
-            msg2 = f"⚓ QUEST: {text.capitalize()}. Quest ends in {fmt_time(dur)}."
+            msg2 = f"⚓ QUEST: {_sentence(text)}. Quest ends in {fmt_time(dur)}."
             msg  = f"{msg1} {msg2}"
         else:
             self._quest["type"]   = 2
@@ -922,7 +936,7 @@ class GameEngine:
                 f"{q['username']}@{q['network']} [{q['pos_x']}, {q['pos_y']}]"
                 for q in questers)
             msg1 = f"⚓ QUEST: {names_coords} have been chosen by the gods."
-            msg2 = (f"⚓ QUEST: {text.capitalize()}. "
+            msg2 = (f"⚓ QUEST: {_sentence(text)}. "
                     f"First reach {lm1[0]} [{lm1[1]}, {lm1[2]}], "
                     f"then {lm2[0]} [{lm2[1]}, {lm2[2]}].")
             msg  = f"{msg1} {msg2}"
