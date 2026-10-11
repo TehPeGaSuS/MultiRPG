@@ -310,6 +310,20 @@ const mapImg = new Image();
 mapImg.src = '/static/map.png';
 mapImg.onload = () => {{
   offCtx.drawImage(mapImg, 0, 0, W, H);
+  // Place names, drawn once into the background so player dots sit on top
+  offCtx.font = 'italic 11px Georgia, serif';
+  offCtx.textAlign = 'center';
+  offCtx.textBaseline = 'middle';
+  offCtx.lineJoin = 'round';
+  offCtx.lineWidth = 3;
+  for (const [name, x, y] of LOCATIONS) {{
+    const half = offCtx.measureText(name).width / 2 + 3;
+    const lx = Math.min(Math.max(x, half), W - half);
+    offCtx.strokeStyle = 'rgba(244,232,200,0.85)';
+    offCtx.strokeText(name, lx, y);
+    offCtx.fillStyle = '#4a3318';
+    offCtx.fillText(name, lx, y);
+  }}
   drawReady = true;
   draw();
 }};
