@@ -299,6 +299,9 @@ const canvas    = document.getElementById('map');
 const ctx       = canvas.getContext('2d');
 const W = 500, H = 500;
 let players = [];
+// Keep dots fully on the map; positions at the very edge are drawn a few px in
+const PAD = 8;
+const clampXY = v => Math.min(Math.max(v, PAD), W - PAD);
 
 // ── Place data ──────────────────────────────────────────────────────────────
 const LOCATIONS = {locations_js};
@@ -352,9 +355,9 @@ function draw() {{
   if (!drawReady) return;
   ctx.drawImage(off, 0, 0);
   // Offline first (behind online)
-  for (const p of players.filter(p => !p.is_online)) drawDot(ctx, p.x, p.y, false);
+  for (const p of players.filter(p => !p.is_online)) drawDot(ctx, clampXY(p.x), clampXY(p.y), false);
   // Online on top
-  for (const p of players.filter(p =>  p.is_online)) drawDot(ctx, p.x, p.y, true);
+  for (const p of players.filter(p =>  p.is_online)) drawDot(ctx, clampXY(p.x), clampXY(p.y), true);
 }}
 
 // ── Data refresh ──────────────────────────────────────────────────────────────
@@ -386,7 +389,7 @@ canvas.addEventListener('mousemove', e => {{
   const r  = canvas.getBoundingClientRect();
   const mx = (e.clientX - r.left) * (W / r.width);
   const my = (e.clientY - r.top)  * (H / r.height);
-  const hit    = players.find(p => Math.hypot(p.x - mx, p.y - my) < 8);
+  const hit    = players.find(p => Math.hypot(clampXY(p.x) - mx, clampXY(p.y) - my) < 8);
   const region = regionAt(mx, my);
   const locLine = region
     ? `<span class="region-name">${{esc(region)}}</span>`
@@ -1172,7 +1175,7 @@ tr:last-child th,tr:last-child td{border-bottom:none}
 const cv=document.getElementById('mm');
 const ctx=cv.getContext('2d');
 const W=500,H=500;
-const PX={px},PY={py};
+const PX=Math.min(Math.max({px},8),W-8),PY=Math.min(Math.max({py},8),H-8);
 
 // Load pirate map image as background
 const mapImg = new Image();
