@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
-from engine.locations import LOCATIONS, nearest_location
+from engine.locations import LOCATIONS
 from version import __version__, REPO_URL
 
 # ── Real IP (Cloudflare tunnel forwards CF-Connecting-IP) ─────────────────────
@@ -1131,7 +1131,7 @@ tr:last-child th,tr:last-child td{border-bottom:none}
         {row('Account Created', fmt_ts(p['created_at']))}
         {row('Last Login', fmt_ts(p['last_login']))}
         {row('Total Idled', fmt_ttl(p['idled']))}
-        {row('Position', f"{escape(nearest_location(px, py))} ({px}, {py})")}
+        {row('Position', f"{px}, {py}")}
         {row('Alignment', alignment)}
         {row('Item Sum', isum)}
       </table>
@@ -1170,12 +1170,28 @@ const cv=document.getElementById('mm');
 const ctx=cv.getContext('2d');
 const W=500,H=500;
 const PX=Math.min(Math.max({px},8),W-8),PY=Math.min(Math.max({py},8),H-8);
+const LOCATIONS={json.dumps(LOCATIONS)};
 
 // Load pirate map image as background
 const mapImg = new Image();
 mapImg.src = '/static/map.png';
 mapImg.onload = () => {{
   ctx.drawImage(mapImg, 0, 0, W, H);
+  // Place names, same style as the World Map page
+  ctx.font = 'italic 11px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3;
+  for (const [name, x, y] of LOCATIONS) {{
+    const half = ctx.measureText(name).width / 2 + 3;
+    const lx = Math.min(Math.max(x, half), W - half);
+    ctx.strokeStyle = 'rgba(244,232,200,0.85)';
+    ctx.strokeText(name, lx, y);
+    ctx.fillStyle = '#4a3318';
+    ctx.fillText(name, lx, y);
+  }}
+  ctx.textBaseline = 'alphabetic';
   drawDot();
 }};
 
