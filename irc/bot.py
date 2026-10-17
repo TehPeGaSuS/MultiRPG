@@ -1,7 +1,7 @@
 """irc/bot.py — IRC adapter. All player commands via PM only."""
 import asyncio, logging
 from typing import Optional
-from engine.game_engine import GameEngine, Broadcast, broadcast_net
+from engine.game_engine import GameEngine, Broadcast, broadcast_net, resolve_bot_tags
 from version import __version__, REPO_URL
 import updatecheck
 
@@ -119,10 +119,19 @@ class IRCBot:
             await self._send_queue.put(f"PRIVMSG {nick} :{chunk}")
 
     async def deliver(self, b: Broadcast):
+    def _bot_nick_for(self, network):
+        """Current bot nick on the given network (this one or a sibling)."""
+        manager = getattr(self, "manager", None)
+        for bot in (manager.bots if manager else [self]):
+            if bot.network_name == network:
+                return bot.current_nick
+        return None
+
         """Called by BotManager to route cross-network broadcasts."""
         if b.scope in ("all", "network") and (b.scope == "all" or b.network == self.network_name):
-            log.info(f"[{self.network_name}] deliver -> say: {b.message[:80]}")
-            await self.say(b.message)
+            text = resolve_bot_tags(b.message, self._bot_nick_for)
+            log.info(f"[{self.network_name}] deliver -> say: {text[:80]}")
+            await self.say(text)
         elif b.scope == "notice" and b.network == self.network_name and b.nick:
             await self.notice_nick(b.nick, b.message)
 

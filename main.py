@@ -66,6 +66,8 @@ class BotManager:
         self.bots.append(bot)
         bot.broadcast_callback = self.deliver_all   # cross-network routing
         bot.manager = self                          # sibling lookup (forcelogin WHO)
+        if bot.network_name not in bot.engine.bot_networks:
+            bot.engine.bot_networks.append(bot.network_name)   # bot can be a battle opponent
     async def deliver_all(self, broadcasts: list[Broadcast]):
         for b in broadcasts:
             for bot in self.bots:

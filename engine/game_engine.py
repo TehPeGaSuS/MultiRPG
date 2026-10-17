@@ -1,6 +1,6 @@
 # pylint: disable=E1136
 """engine/game_engine.py — Core IdleRPG game logic."""
-import logging, random, time
+import logging, random, re, time
 from dataclasses import dataclass
 from typing import Optional
 from db.database import Database, ITEM_SLOTS
@@ -110,20 +110,36 @@ def eff_sum(raw: int, alignment: str) -> int:
     return raw
 
 # ── Battle ────────────────────────────────────────────────────────────────────
-BOT_NAME = "MultiRPG"   # the bot itself can be picked as an opponent (original: $primnick)
+# The bot itself can be picked as an opponent (original: $primnick). It is
+# named after the challenger's network, and its nick differs per network, so
+# broadcasts carry "{BOT:<network>}" and IRCBot.deliver() swaps in that
+# network's current nick (as nick@network). BOT_NAME is the fallback and what
+# the DB event log records.
+BOT_NAME = "MultiRPG"
+BOT_RE   = re.compile(r"\{BOT:([^}]*)\}")
 
-def pick_opponent(opponents):
-    """Random opponent from the online list; 1 in len+1 the bot itself (None)."""
+def bot_tag(network: str) -> str:
+    return "{BOT:%s}" % network
+
+def resolve_bot_tags(text: str, nick_for) -> str:
+    """Replace {BOT:net} with nick@net; nick_for(net) -> bot nick or None."""
+    return BOT_RE.sub(lambda m: f"{nick_for(m[1]) or BOT_NAME}@{m[1]}", text)
+
+def pick_opponent(opponents, bot_networks=()):
+    """Random opponent from the online list; 1 in len+1 a bot instead (original:
+    $primnick). Which network's bot is chosen at random, so a SwiftIRC player
+    can meet the DALnet bot."""
     if random.randrange(len(opponents) + 1) < 1:
-        return None
+        return {"bot_network": random.choice(list(bot_networks) or [None])}
     return random.choice(opponents)
 
 async def resolve_battle(db: Database, challenger, opponent,
                          collision: bool = False) -> list:
-    """Port of challenge_opp / collision_fight. opponent=None means the bot."""
+    """Port of challenge_opp / collision_fight. An opponent of the form
+    {"bot_network": net} (see pick_opponent) means the bot on that network."""
     # Always re-fetch for current TTL
     c = await db.get_player_by_id(challenger["id"]) or challenger
-    bot = opponent is None
+    bot = opponent is None or "bot_network" in opponent
     if bot:
         best = 0
         for pl in await db.get_all_players():
@@ -143,7 +159,8 @@ async def resolve_battle(db: Database, challenger, opponent,
     won    = c_roll >= o_roll
     msgs   = []
 
-    outag = BOT_NAME if bot else utag(o)
+    outag = ("the bot " + bot_tag((opponent or {}).get('bot_network') or c['network'])
+             if bot else utag(o))
     rolls = f"[{c_roll}/{c_sum}]"
     orolls = f"[{o_roll}/{o_sum}]"
     if collision:
@@ -192,7 +209,7 @@ async def resolve_battle(db: Database, challenger, opponent,
         msgs += [broadcast_all(msg),
                  broadcast_all(f"{utag(c)} reaches next level in {fmt_time(c['ttl'] + pen)}.")]
 
-    await db.log_event("battle", msg, c["id"], o["id"])
+    await db.log_event("battle", resolve_bot_tags(msg, lambda n: None), c["id"], o["id"])
     await db.commit()
     return msgs
 
@@ -203,6 +220,7 @@ class GameEngine:
                  hof_type: str = "level", win_level: int = 40,
                  round_cron: str = "0 0 1 1,4,7,10 *"):
         self.db         = db
+        self.bot_networks: list = []   # filled by BotManager.register
         self.self_clock = self_clock
         self.limit_pen  = limit_pen
         self.rp_base    = RP_BASE
@@ -768,7 +786,7 @@ class GameEngine:
             fresh = await self.db.get_player_by_id(p["id"])
             if fresh:
                 msgs.extend(await resolve_battle(
-                    self.db, fresh, pick_opponent(opponents)))
+                    self.db, fresh, pick_opponent(opponents, self.bot_networks)))
         return msgs
 
     async def _find_item(self, player, level) -> list:
@@ -1257,7 +1275,7 @@ class GameEngine:
         c      = random.choice(high)
         others = [p for p in online if p["id"] != c["id"]]
         if not others: return []
-        return await resolve_battle(self.db, c, pick_opponent(others))
+        return await resolve_battle(self.db, c, pick_opponent(others, self.bot_networks))
 
     async def _announce_top(self) -> list:
         players = await self.db.get_all_players()
