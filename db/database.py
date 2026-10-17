@@ -302,9 +302,9 @@ class Database:
     async def steal_item(self, winner_id, loser_id):
         w = {r["slot"]:r for r in await self.get_items(winner_id)}
         l = {r["slot"]:r for r in await self.get_items(loser_id)}
-        candidates = [s for s in ITEM_SLOTS if l[s]["level"] > w[s]["level"]]
-        if not candidates: return None
-        slot  = random.choice(candidates)
+        # original: pick a random slot first; no swap unless the loser's is better
+        slot  = random.choice(ITEM_SLOTS)
+        if l[slot]["level"] <= w[slot]["level"]: return None
         w_lvl = w[slot]["level"]
         l_lvl = l[slot]["level"]
         await self.conn.execute(

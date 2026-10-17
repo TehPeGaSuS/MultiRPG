@@ -110,54 +110,83 @@ def eff_sum(raw: int, alignment: str) -> int:
     return raw
 
 # ── Battle ────────────────────────────────────────────────────────────────────
+BOT_NAME = "MultiRPG"   # the bot itself can be picked as an opponent (original: $primnick)
+
+def pick_opponent(opponents):
+    """Random opponent from the online list; 1 in len+1 the bot itself (None)."""
+    if random.randrange(len(opponents) + 1) < 1:
+        return None
+    return random.choice(opponents)
+
 async def resolve_battle(db: Database, challenger, opponent,
                          collision: bool = False) -> list:
+    """Port of challenge_opp / collision_fight. opponent=None means the bot."""
     # Always re-fetch for current TTL
     c = await db.get_player_by_id(challenger["id"]) or challenger
-    o = await db.get_player_by_id(opponent["id"])   or opponent
-    if c["id"] == o["id"]:
-        return []   # never battle yourself
+    bot = opponent is None
+    if bot:
+        best = 0
+        for pl in await db.get_all_players():
+            best = max(best, await db.get_item_sum(pl["id"]))
+        o = {"id": None, "username": BOT_NAME, "network": "", "level": 0,
+             "alignment": "", "ttl": 0, "pos_x": 0, "pos_y": 0}
+        o_sum = best + 1
+    else:
+        o = await db.get_player_by_id(opponent["id"]) or opponent
+        if c["id"] == o["id"]:
+            return []   # never battle yourself
+        o_sum = eff_sum(await db.get_item_sum(o["id"]), o["alignment"])
 
     c_sum  = eff_sum(await db.get_item_sum(c["id"]), c["alignment"])
-    o_sum  = eff_sum(await db.get_item_sum(o["id"]), o["alignment"])
     c_roll = random.randint(0, max(c_sum - 1, 0))
     o_roll = random.randint(0, max(o_sum - 1, 0))
     won    = c_roll >= o_roll
-    winner, loser = (c, o) if won else (o, c)
     msgs   = []
 
+    outag = BOT_NAME if bot else utag(o)
+    rolls = f"[{c_roll}/{c_sum}]"
+    orolls = f"[{o_roll}/{o_sum}]"
     if collision:
-        verb = (f"{tag(challenger)} has come upon {tag(opponent)} and "
+        verb = (f"{utag(c)} {rolls} has come upon {outag} {orolls} and "
                 f"{'taken them in' if won else 'been defeated in'} combat!")
     else:
-        verb = (f"{tag(challenger)} has challenged {tag(opponent)} in "
+        verb = (f"{utag(c)} {rolls} has challenged {outag} {orolls} in "
                 f"combat and {'won' if won else 'lost'}!")
 
     if won:
-        gain    = int(max(loser["level"] / 4, 7) / 100 * winner["ttl"])
-        new_ttl = max(0, winner["ttl"] - gain)
-        await db.update_ttl(winner["id"], new_ttl)
-        msg = f"{verb} {fmt_time(gain)} is removed from {utag(winner)}'s clock."
+        # opponent's level drives the gain (bot: flat 20% in a challenge)
+        base = 20 if (bot and not collision) else o["level"] // 4
+        gain    = int(max(base, 7) / 100 * c["ttl"])
+        new_ttl = max(0, c["ttl"] - gain)
+        await db.update_ttl(c["id"], new_ttl)
+        msg = f"{verb} {fmt_time(gain)} is removed from {utag(c)}'s clock."
         msgs += [broadcast_all(msg),
-                 broadcast_all(f"{utag(winner)} reaches next level in {fmt_time(new_ttl)}.")]
-        cs = 50 if c["alignment"] == "g" else 20 if c["alignment"] == "e" else 35
-        if random.randint(0, cs - 1) < 1:
-            crit = int(((5 + random.randint(0, 19)) / 100) * loser["ttl"])
-            await db.add_penalty(loser["id"], crit)
-            cm = (f"{utag(winner)} dealt {utag(loser)} a Critical Strike! "
-                  f"{fmt_time(crit)} added to {utag(loser)}'s clock.")
-            msgs.append(broadcast_all(cm))
-            await db.log_event("critical", cm, winner["id"], loser["id"])
-        elif random.randint(0, 24) < 1 and winner["level"] > 19:
-            result = await db.steal_item(winner["id"], loser["id"])
-            if result:
-                slot, sl, ol = result
-                sm = (f"In battle, {utag(loser)} dropped their level {sl} {slot}! "
-                      f"{utag(winner)} picks it up, tossing their old level {ol} {slot}.")
-                msgs.append(broadcast_all(sm))
-                await db.log_event("steal", sm, winner["id"], loser["id"])
+                 broadcast_all(f"{utag(c)} reaches next level in {fmt_time(new_ttl)}.")]
+        if not bot:
+            # alignment shifts crit odds in challenges only; collisions are flat 1/35
+            cs = 35 if collision else (50 if c["alignment"] == "g"
+                                       else 20 if c["alignment"] == "e" else 35)
+            if random.randrange(cs) < 1:
+                crit = int(((5 + random.randint(0, 19)) / 100) * o["ttl"])
+                await db.add_penalty(o["id"], crit)
+                cm = (f"{utag(c)} has dealt {utag(o)} a Critical Strike! "
+                      f"{fmt_time(crit)} is added to {utag(o)}'s clock.")
+                msgs.append(broadcast_all(cm))
+                msgs.append(broadcast_all(
+                    f"{utag(o)} reaches next level in {fmt_time(o['ttl'] + crit)}."))
+                await db.log_event("critical", cm, c["id"], o["id"])
+            elif random.randrange(25) < 1 and c["level"] > 19:
+                result = await db.steal_item(c["id"], o["id"])
+                if result:
+                    slot, sl, ol = result
+                    sm = (f"In the fierce battle, {utag(o)} dropped their level {sl} {slot}! "
+                          f"{utag(c)} picks it up, tossing their old level {ol} {slot} "
+                          f"to {utag(o)}.")
+                    msgs.append(broadcast_all(sm))
+                    await db.log_event("steal", sm, c["id"], o["id"])
     else:
-        pen = int(max(loser["level"] / 7, 7) / 100 * c["ttl"])
+        base = 10 if bot else o["level"] // 7
+        pen = int(max(base, 7) / 100 * c["ttl"])
         await db.add_penalty(c["id"], pen)
         msg = f"{verb} {fmt_time(pen)} is added to {utag(c)}'s clock."
         msgs += [broadcast_all(msg),
@@ -681,7 +710,7 @@ class GameEngine:
         # ── Periodic announcements ────────────────────────────────────────────
         self._rpreport += sc
         if self._rpreport % 36000 == 0: msgs.extend(await self._announce_top())
-        if self._rpreport % 1200  == 0: msgs.extend(await self._high_level_battle(online))
+        if self._rpreport % 3600  == 0: msgs.extend(await self._high_level_battle(online))
 
         # ── Quest ─────────────────────────────────────────────────────────────
         try:
@@ -739,7 +768,7 @@ class GameEngine:
             fresh = await self.db.get_player_by_id(p["id"])
             if fresh:
                 msgs.extend(await resolve_battle(
-                    self.db, fresh, random.choice(opponents)))
+                    self.db, fresh, pick_opponent(opponents)))
         return msgs
 
     async def _find_item(self, player, level) -> list:
@@ -1228,7 +1257,7 @@ class GameEngine:
         c      = random.choice(high)
         others = [p for p in online if p["id"] != c["id"]]
         if not others: return []
-        return await resolve_battle(self.db, c, random.choice(others))
+        return await resolve_battle(self.db, c, pick_opponent(others))
 
     async def _announce_top(self) -> list:
         players = await self.db.get_all_players()
