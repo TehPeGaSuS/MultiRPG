@@ -59,6 +59,7 @@ class IRCBot:
                 self.host, self.port)
         self._connected = True
         if self.server_pass: await self._raw(f"PASS {self.server_pass}")
+        self.current_nick = self.nick   # fresh connection: start from the configured nick
         await self._raw(f"NICK {self.nick}")
         await self._raw(f"USER multirpg 0 * :Multi IdleRPG Bot")
 
@@ -118,7 +119,6 @@ class IRCBot:
         for chunk in _split(msg):
             await self._send_queue.put(f"PRIVMSG {nick} :{chunk}")
 
-    async def deliver(self, b: Broadcast):
     def _bot_nick_for(self, network):
         """Current bot nick on the given network (this one or a sibling)."""
         manager = getattr(self, "manager", None)
@@ -127,6 +127,7 @@ class IRCBot:
                 return bot.current_nick
         return None
 
+    async def deliver(self, b: Broadcast):
         """Called by BotManager to route cross-network broadcasts."""
         if b.scope in ("all", "network") and (b.scope == "all" or b.network == self.network_name):
             text = resolve_bot_tags(b.message, self._bot_nick_for)
@@ -151,6 +152,7 @@ class IRCBot:
 
             # 001 — welcome / registered
             if cmd2 == "001":
+                if len(parts) > 2: self.current_nick = parts[2]   # the nick the server really gave us
                 log.info(f"[{self.network_name}] Registered. Joining {self.channel}")
                 if self.nickserv_pass:
                     await self._raw(f"PRIVMSG NickServ :IDENTIFY {self.nickserv_pass}")
@@ -348,7 +350,9 @@ class IRCBot:
 
         elif command == "NICK":
             new_nick = parts[2].lstrip(":") if len(parts) > 2 else ""
-            if new_nick:
+            if new_nick and usernick.lower() == self.current_nick.lower():
+                self.current_nick = new_nick   # the bot itself was renamed
+            elif new_nick:
                 await self._deliver_local(
                     await self.engine.on_nick_change(
                         usernick, new_nick, self.network_name))
