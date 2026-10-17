@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 from aiohttp import web
 from db.database import Database
-from engine.locations import LOCATIONS
+from engine.locations import LOCATIONS, nearest_location
 from version import __version__, REPO_URL
 
 # ── Real IP (Cloudflare tunnel forwards CF-Connecting-IP) ─────────────────────
@@ -1131,7 +1131,7 @@ tr:last-child th,tr:last-child td{border-bottom:none}
         {row('Account Created', fmt_ts(p['created_at']))}
         {row('Last Login', fmt_ts(p['last_login']))}
         {row('Total Idled', fmt_ttl(p['idled']))}
-        {row('Position', f"{px}, {py}")}
+        {row('Position', f"{escape(nearest_location(px, py))} ({px}, {py})")}
         {row('Alignment', alignment)}
         {row('Item Sum', isum)}
       </table>
