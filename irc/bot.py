@@ -1,5 +1,5 @@
 """irc/bot.py — IRC adapter. All player commands via PM only."""
-import asyncio, logging
+import asyncio, base64, logging
 from typing import Optional
 from engine.game_engine import GameEngine, Broadcast, broadcast_net, resolve_bot_tags
 from version import __version__, REPO_URL
@@ -10,14 +10,22 @@ log = logging.getLogger(__name__)
 class IRCBot:
     def __init__(self, network_name, host, port, channel, nick, engine,
                  nickserv_pass=None, server_pass=None, use_ssl=False, tls_verify=True,
-                 reconnect_delay=30, modes="+i"):
+                 reconnect_delay=30, modes="+i", sasl_username=None, sasl_password=None,
+                 nick_recover=None, connect_commands=None, nickserv_target="NickServ"):
         self.network_name    = network_name
         self.host, self.port = host, port
         self.channel         = channel
         self.nick            = nick
         self.current_nick    = nick
         self.engine          = engine
-        self.nickserv_pass   = nickserv_pass
+        # One password serves both: SASL falls back to nickserv_pass and the
+        # IDENTIFY fallback to sasl_password, so old configs keep working.
+        self.sasl_username   = sasl_username
+        self.sasl_password   = sasl_password or nickserv_pass
+        self.nickserv_pass   = nickserv_pass or sasl_password
+        self.nickserv_target = nickserv_target or "NickServ"  # e.g. NickServ@services.dal.net
+        self.nick_recover    = list(nick_recover or [])      # raw lines, $nick = configured nick
+        self.connect_commands = list(connect_commands or [])  # raw lines sent after 001
         self.server_pass     = server_pass
         self.use_ssl         = use_ssl
         self.tls_verify      = tls_verify
@@ -61,7 +69,9 @@ class IRCBot:
         self._connected = True
         if self.server_pass: await self._raw(f"PASS {self.server_pass}")
         self.current_nick = self.nick   # fresh connection: start from the configured nick
-        self._cap_ls = []
+        self._registered  = False
+        self._sasl_ok     = False
+        self._cap_ls = {}
         # Ask for chghost so a services vhost change arrives as CHGHOST instead of
         # a fake PART/JOIN (which would cost the player a part penalty and a quest).
         # Servers without CAP just ignore it and register normally.
@@ -153,6 +163,16 @@ class IRCBot:
             await self._raw(f"PONG {parts[1]}" if len(parts) > 1 else "PONG")
             return
 
+        # AUTHENTICATE + — the server is ready for our SASL PLAIN credentials
+        if parts[0].upper() == "AUTHENTICATE":
+            u, pw = self.sasl_username, self.sasl_password
+            blob  = base64.b64encode(f"{u}\0{u}\0{pw}".encode()).decode()
+            for i in range(0, len(blob), 400):
+                await self._raw(f"AUTHENTICATE {blob[i:i+400]}")
+            if len(blob) % 400 == 0:
+                await self._raw("AUTHENTICATE +")
+            return
+
         if len(parts) > 1:
             cmd2 = parts[1]
 
@@ -162,32 +182,72 @@ class IRCBot:
                 if sub == "LS":
                     more = len(parts) > 5 and parts[4] == "*"
                     caps = " ".join(parts[5 if more else 4:]).lstrip(":").split()
-                    self._cap_ls += [c.split("=")[0] for c in caps]
+                    for c in caps:
+                        name, _, value = c.partition("=")
+                        self._cap_ls[name] = value
                     if not more:
-                        if "chghost" in self._cap_ls:
-                            await self._raw("CAP REQ :chghost")
-                        else:
-                            await self._raw("CAP END")
-                elif sub in ("ACK", "NAK"):
+                        want = [c for c in ("chghost",) if c in self._cap_ls]
+                        if self.sasl_username and self.sasl_password:
+                            mechs = self._cap_ls.get("sasl")
+                            if mechs is None:
+                                log.warning(f"[{self.network_name}] Server has no SASL; "
+                                            "falling back to NickServ IDENTIFY")
+                            elif mechs and "PLAIN" not in mechs.upper().split(","):
+                                log.warning(f"[{self.network_name}] Server SASL lacks PLAIN "
+                                            f"({mechs}); falling back to NickServ IDENTIFY")
+                            else:
+                                want.append("sasl")
+                        await self._raw(f"CAP REQ :{' '.join(want)}" if want else "CAP END")
+                elif sub == "ACK":
+                    acked = " ".join(parts[4:]).lstrip(":").split()
+                    if "sasl" in acked:
+                        await self._raw("AUTHENTICATE PLAIN")   # CAP END once SASL is done
+                    else:
+                        await self._raw("CAP END")
+                elif sub == "NAK":
                     await self._raw("CAP END")
+                return
+
+            # 903 — SASL success; 902/904/905/906/907 — failed or not possible
+            if cmd2 == "903":
+                self._sasl_ok = True
+                log.info(f"[{self.network_name}] SASL authentication successful")
+                await self._raw("CAP END")
+                return
+            if cmd2 in ("902", "904", "905", "906", "907"):
+                log.warning(f"[{self.network_name}] SASL failed ({cmd2}: "
+                            f"{' '.join(parts[3:]).lstrip(':')}); falling back to NickServ IDENTIFY")
+                await self._raw("CAP END")
                 return
 
             # 001 — welcome / registered
             if cmd2 == "001":
                 if len(parts) > 2: self.current_nick = parts[2]   # the nick the server really gave us
+                self._registered = True
                 log.info(f"[{self.network_name}] Registered. Joining {self.channel}")
-                if self.nickserv_pass:
-                    await self._raw(f"PRIVMSG NickServ :IDENTIFY {self.nickserv_pass}")
+                taken = self.current_nick.lower() != self.nick.lower()
+                # With the nick taken and nick_recover set, identify once it's back
+                # (see the own-NICK handler): IDENTIFY on the fallback nick is useless.
+                if self.nickserv_pass and not self._sasl_ok and not (taken and self.nick_recover):
+                    await self._identify()
                     await asyncio.sleep(2)
+                for line in self.connect_commands:
+                    await self._raw(line.replace("$nick", self.nick))
                 if self.modes:
                     await self._raw(f"MODE {self.current_nick} {self.modes}")
+                if taken and self.nick_recover:
+                    log.info(f"[{self.network_name}] {self.nick} is taken; running nick_recover")
+                    for line in self.nick_recover:
+                        await self._raw(line.replace("$nick", self.nick))
                 await self._raw(f"JOIN {self.channel}")
                 return
 
-            # 433 — nick in use
+            # 433 — nick in use. While registering, try nick_; once registered
+            # it's a failed regain, so just keep the nick we have.
             if cmd2 == "433":
-                self.current_nick += "_"
-                await self._raw(f"NICK {self.current_nick}")
+                if not self._registered:
+                    self.current_nick += "_"
+                    await self._raw(f"NICK {self.current_nick}")
                 return
 
             # 352 — WHO reply: :server 352 botnick #chan user host server nick H :0 realname
@@ -343,6 +403,18 @@ class IRCBot:
                 log.info(f"[{self.network_name}] Updated userhost for {p['username']}: {uh}")
             return
 
+        # Our own nick change (a regain, or services renaming us): follow it
+        if command == "NICK" and usernick.lower() == self.current_nick.lower():
+            new_nick = parts[2].lstrip(":") if len(parts) > 2 else ""
+            if new_nick:
+                regained = (new_nick.lower() == self.nick.lower()
+                            and self.current_nick.lower() != self.nick.lower())
+                self.current_nick = new_nick
+                if regained and self.nickserv_pass and not self._sasl_ok:
+                    # Back on our nick without SASL: identify for it now
+                    await self._identify()
+            return
+
         # Ignore our own messages for all other commands
         if usernick == self.current_nick:
             return
@@ -383,14 +455,14 @@ class IRCBot:
                 await self.engine.on_part(usernick, self.network_name))
 
         elif command == "QUIT":
+            await self._regain_nick(usernick)
             await self._deliver_local(
                 await self.engine.on_quit(usernick, self.network_name))
 
         elif command == "NICK":
             new_nick = parts[2].lstrip(":") if len(parts) > 2 else ""
-            if new_nick and usernick.lower() == self.current_nick.lower():
-                self.current_nick = new_nick   # the bot itself was renamed
-            elif new_nick:
+            await self._regain_nick(usernick)
+            if new_nick:
                 await self._deliver_local(
                     await self.engine.on_nick_change(
                         usernick, new_nick, self.network_name))
@@ -400,6 +472,15 @@ class IRCBot:
             if kicked:
                 await self._deliver_local(
                     await self.engine.on_kick(kicked, self.network_name))
+
+    async def _identify(self):
+        await self._raw(f"PRIVMSG {self.nickserv_target} :IDENTIFY {self.nickserv_pass}")
+
+    async def _regain_nick(self, gone):
+        """Whoever held our configured nick quit or changed nick: take it back."""
+        if (gone.lower() == self.nick.lower()
+                and self.current_nick.lower() != self.nick.lower()):
+            await self._raw(f"NICK {self.nick}")
 
     # ── PM command dispatcher ─────────────────────────────────────────────────
 

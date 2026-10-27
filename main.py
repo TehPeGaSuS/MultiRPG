@@ -38,6 +38,17 @@ use_ssl = true
 # tls_verify = false
 # nickserv_pass = "yourpassword"
 # server_pass   = ""
+# SASL PLAIN (password falls back to nickserv_pass; IDENTIFY is used if SASL fails)
+# sasl_username = "MultiRPG"
+# sasl_password = "yourpassword"
+# Raw lines sent after connecting, before joining ($nick = the configured nick)
+# connect_commands = ["OPER MultiRPG operpass"]
+# Raw lines sent only when the nick was taken, e.g. Atheme / Anope / DALnet:
+# nick_recover = ["PRIVMSG NickServ :REGAIN $nick"]
+# nick_recover = ["PRIVMSG NickServ :RECOVER $nick yourpassword"]
+# nick_recover = ["PRIVMSG NickServ@services.dal.net :GHOST $nick yourpassword", "NICK $nick"]
+# Who IDENTIFY goes to (default NickServ); on DALnet use the full address
+# nickserv_target = "NickServ@services.dal.net"
 
 [[networks]]
 name    = "libera"
@@ -145,6 +156,11 @@ async def main():
             nick          = net["nick"],
             engine        = engine,
             nickserv_pass = net.get("nickserv_pass"),
+            nickserv_target = net.get("nickserv_target", "NickServ"),
+            sasl_username = net.get("sasl_username"),
+            sasl_password = net.get("sasl_password"),
+            nick_recover  = net.get("nick_recover", []),
+            connect_commands = net.get("connect_commands", []),
             server_pass   = net.get("server_pass"),
             use_ssl       = bool(net.get("use_ssl", False)),
             tls_verify    = bool(net.get("tls_verify", True)),

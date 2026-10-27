@@ -92,6 +92,27 @@ use_ssl    = true
 
 Add as many `[[networks]]` blocks as you like. All networks share the same game world and player database.
 
+Optional per-network login and nick settings:
+
+| Key | What it does |
+|---|---|
+| `nickserv_pass` | Sent as `PRIVMSG NickServ :IDENTIFY <pass>` after connecting. When the nick was taken and `nick_recover` is set, it's sent once the nick is back instead. |
+| `nickserv_target` | Who `IDENTIFY` goes to (default `NickServ`). On DALnet use `NickServ@services.dal.net`. |
+| `sasl_username`, `sasl_password` | Log in with SASL PLAIN before registering, so the bot is identified before it joins. The password falls back to `nickserv_pass`. If the server has no SASL, or SASL fails, the bot uses `IDENTIFY` instead. |
+| `connect_commands` | Raw lines sent after connecting, before joining (`$nick` = the configured nick), e.g. `["OPER MultiRPG operpass"]`. |
+| `nick_recover` | Raw lines sent only when the configured nick was taken (`$nick` = that nick). The bot also takes the nick back whenever its holder quits or changes nick. |
+
+```toml
+# Atheme
+nick_recover = ["PRIVMSG NickServ :REGAIN $nick"]
+# Anope
+nick_recover = ["PRIVMSG NickServ :RECOVER $nick yourpass"]
+# DALnet (IDENTIFY follows automatically once the nick is back)
+nickserv_pass   = "yourpass"
+nickserv_target = "NickServ@services.dal.net"
+nick_recover    = ["PRIVMSG NickServ@services.dal.net :GHOST $nick yourpass", "NICK $nick"]
+```
+
 ### Keeping it running
 
 With **screen**:
