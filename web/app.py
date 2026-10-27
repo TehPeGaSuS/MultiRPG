@@ -600,6 +600,9 @@ quest. There are two types: <em>time-based</em> (lasting 12–24 hours) and
 <em>grid-based</em> (questers must walk to two map coordinates). On success, all four
 questers have 25% of their TTL removed. If any quester is penalized before the quest ends,
 all online users suffer a p15 punishment.</p>
+<p>A quester who is gone through no fault of their own is taken off the quest instead, with no
+penalties: if a quester isn't in the channel when the bot rejoins, they have 10 minutes to
+come back (rejoin, or <code>LOGIN</code>). The quest carries on with whoever is left.</p>
 
 <a name="grid"></a>
 <h2>Grid System</h2>
@@ -726,8 +729,8 @@ The player will need to log in again with the new name.</p>
 <h3>DEL &lt;username&gt;</h3>
 <p>Permanently delete a player's account. Admin accounts are refused (run
 <code>DELADMIN</code> first). If the player is on an active quest, they are removed from it and
-the quest carries on with the remaining questers (no penalties); it is cancelled only if nobody
-is left. The channels are told who is still on the quest.</p>
+the quest carries on with the remaining questers (no penalties); it is cancelled only if fewer
+than <code>quest_min_questers</code> (default 1) are left. The channels are told who is still on the quest.</p>
 <pre>/msg MultiRPG DEL PotHead</pre>
 
 <h3>DELOLD &lt;days&gt;</h3>

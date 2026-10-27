@@ -236,12 +236,16 @@ class IRCBot:
             # 315 — end of WHO
             if cmd2 == "315":
                 # Anyone still in _prev_online wasn't in the channel — log them out
+                absent = []
                 for uname in self._prev_online.values():
                     p = await self.engine.db.get_player(uname, self.network_name)
                     if p:
                         await self.engine.db.set_offline(p["id"])
+                        absent.append(p)
                         log.info(f"[{self.network_name}] {uname} not in channel — logged out")
                 self._prev_online = {}
+                # Absent questers get a grace period before leaving the quest
+                await self._deliver_local(self.engine.quest_absent(absent, self.channel))
                 # Announce summary then voice
                 logged_in = self._auto_logged_in[:]
                 self._auto_logged_in = []

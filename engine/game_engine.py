@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 MAP_X, MAP_Y         = 500, 500
 RP_BASE, RP_STEP     = 600, 1.16   # IdleRPG 3.0 defaults: TTL = 600 * 1.16^level
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
+QUEST_GRACE          = 600    # secs an absent quester gets to come back before leaving the quest
 
 
 def _sentence(text: str) -> str:
@@ -218,7 +219,7 @@ async def resolve_battle(db: Database, challenger, opponent,
 class GameEngine:
     def __init__(self, db: Database, self_clock: int = 5, limit_pen: int = 0,
                  hof_type: str = "level", win_level: int = 40,
-                 round_cron: str = "0 0 1 1,4,7,10 *"):
+                 round_cron: str = "0 0 1 1,4,7,10 *", quest_min_questers: int = 1):
         self.db         = db
         self.bot_networks: list = []   # filled by BotManager.register
         self.self_clock = self_clock
@@ -228,6 +229,8 @@ class GameEngine:
         self.hof_type   = hof_type    # "level", "cron", or "none"
         self.win_level  = win_level   # used when hof_type="level"
         self.round_cron = round_cron  # used when hof_type="cron"
+        self.quest_min_questers = max(1, quest_min_questers)  # fewer left → quest cancelled
+        self._quest_absent: dict = {}  # quester id -> deadline to come back by
         self._last_cron_check = 0     # last timestamp cron was evaluated
         self._lasttime  = 0          # 0 = not joined yet
         self._rpreport  = self_clock  # start at sc so tick 1 doesn't trigger modulo-zero events
@@ -532,23 +535,8 @@ class GameEngine:
             return (f"{p['username']} is an admin. Run DELADMIN {p['username']} "
                     "first if you really want to delete it."), []
         removed = f"{utag(p)}'s account was removed by an admin."
-        q = self._quest
-        if any(x["id"] == p["id"] for x in q["questers"]):
-            # A quester is gone. It isn't the others' doing, so no penalties:
-            # the quest carries on with whoever is left, and is only cancelled
-            # (and the next one delayed) when nobody is.
-            q["questers"] = [x for x in q["questers"] if x["id"] != p["id"]]
-            what = f"The quest to {q['text']}" if q.get("text") else "The quest"
-            if q["questers"]:
-                await self.db.save_quest(q)
-                n     = len(q["questers"])
-                names = ", ".join(f"{x['username']}@{x['network']}" for x in q["questers"])
-                msg   = f"{removed} {what} now has {n} quester{'s' if n != 1 else ''}: {names}."
-            else:
-                q["qtime"] = int(time.time()) + 43200
-                await self.db.clear_quest()
-                msg = f"{removed} {what} has been cancelled, since no questers are left."
-            broadcasts = [broadcast_all(msg)]
+        if any(x["id"] == p["id"] for x in self._quest["questers"]):
+            broadcasts = await self._drop_questers({p["id"]}, removed)
         else:
             broadcasts = [broadcast_all(removed)]
         await self.db.delete_player(p["id"])
@@ -607,6 +595,63 @@ class GameEngine:
             3: "all messages disabled",
         }
         return f"Silent mode {mode}: {labels.get(mode, 'unknown mode')}."
+
+    # ── Questers who are gone through no fault of their own ──────────────────
+
+    async def _drop_questers(self, ids, lead) -> list:
+        """Take players off the active quest. It isn't the others' doing, so no
+        penalties: the quest carries on with whoever is left, and is only
+        cancelled (and the next one delayed) once fewer than quest_min_questers
+        remain. `lead` opens the announcement."""
+        q = self._quest
+        q["questers"] = [x for x in q["questers"] if x["id"] not in ids]
+        for i in ids: self._quest_absent.pop(i, None)
+        what = f"The quest to {q['text']}" if q.get("text") else "The quest"
+        n    = len(q["questers"])
+        if n >= self.quest_min_questers:
+            await self.db.save_quest(q)
+            names = ", ".join(f"{x['username']}@{x['network']}" for x in q["questers"])
+            return [broadcast_all(
+                f"{lead} {what} now has {n} quester{'s' if n != 1 else ''}: {names}.")]
+        q["questers"] = []
+        q["qtime"]    = int(time.time()) + 43200
+        self._quest_absent.clear()
+        await self.db.clear_quest()
+        why = "no questers are" if not n else "too few questers are"
+        # A reset may have been deferred waiting for the quest to end
+        return ([broadcast_all(f"{lead} {what} has been cancelled, since {why} left.")]
+                + await self.check_win_condition())
+
+    def quest_absent(self, players, channel) -> list:
+        """Questers found missing from the channel (the WHO after the bot
+        rejoins) get QUEST_GRACE seconds to come back before leaving the quest."""
+        ids = {x["id"] for x in self._quest["questers"]}
+        gone = [p for p in players if p["id"] in ids and p["id"] not in self._quest_absent]
+        if not gone: return []
+        for p in gone:
+            self._quest_absent[p["id"]] = int(time.time()) + QUEST_GRACE
+        names = ", ".join(utag(p) for p in gone)
+        verb  = "is" if len(gone) == 1 else "are"
+        return [broadcast_all(
+            f"{names} {verb} on the quest but not in {channel}. Rejoin {channel} "
+            f"(or LOGIN) within {QUEST_GRACE // 60} minutes to stay on it.")]
+
+    async def _check_quest_absent(self) -> list:
+        """Forgive questers who came back; drop those whose grace ran out."""
+        if not self._quest_absent: return []
+        now, late = int(time.time()), set()
+        questers  = {x["id"] for x in self._quest["questers"]}
+        for pid, deadline in list(self._quest_absent.items()):
+            p = await self.db.get_player_by_id(pid)
+            if pid not in questers or not p or p["is_online"]:
+                del self._quest_absent[pid]
+            elif now >= deadline:
+                late.add(pid)
+        if not late: return []
+        names = ", ".join(f"{x['username']}@{x['network']}"
+                          for x in self._quest["questers"] if x["id"] in late)
+        verb  = "has" if len(late) == 1 else "have"
+        return await self._drop_questers(late, f"{names} didn't come back in time and {verb} left the quest.")
 
     # ── Quest penalty check ───────────────────────────────────────────────────
 
@@ -732,6 +777,7 @@ class GameEngine:
 
         # ── Quest ─────────────────────────────────────────────────────────────
         try:
+            msgs.extend(await self._check_quest_absent())
             msgs.extend(await self._check_quest(online))
         except Exception as e:
             log.error(f"Quest error: {e}", exc_info=True)

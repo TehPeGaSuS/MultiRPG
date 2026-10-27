@@ -26,6 +26,7 @@ limit_pen   = 0
 hof_type    = "level"              # "level", "cron", or "none"
 win_level   = 40                   # used when hof_type = "level"
 round_cron  = "0 0 1 1,4,7,10 *"  # used when hof_type = "cron"
+quest_min_questers = 1            # a quest that loses questers is cancelled below this
 
 [[networks]]
 name    = "swiftirc"
@@ -111,6 +112,7 @@ async def main():
     hof_type    = str(game_cfg.get("hof_type",    "level"))
     win_level   = int(game_cfg.get("win_level",   40))
     round_cron  = str(game_cfg.get("round_cron",  "0 0 1 1,4,7,10 *"))
+    quest_min   = int(game_cfg.get("quest_min_questers", 1))
 
     if hof_type == "cron":
         try:
@@ -126,7 +128,7 @@ async def main():
 
     engine     = GameEngine(db, self_clock=self_clock, limit_pen=limit_pen,
                             hof_type=hof_type, win_level=win_level,
-                            round_cron=round_cron)
+                            round_cron=round_cron, quest_min_questers=quest_min)
     await engine.load_persisted_quest()
     startup_msgs = await engine.check_win_condition()
     if startup_msgs:

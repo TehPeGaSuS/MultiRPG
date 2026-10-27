@@ -65,6 +65,7 @@ limit_pen   = 0
 hof_type    = "level"           # "level", "cron", or "none"
 win_level   = 40                # used when hof_type = "level"
 round_cron  = "0 0 1 1,4,7,10 *"  # used when hof_type = "cron" (quarterly)
+quest_min_questers = 1          # a quest that loses questers is cancelled below this
 
 [web]
 host = "0.0.0.0"
@@ -144,6 +145,8 @@ Or add a cron job:
 | `"none"` | never automatically (no Hall of Fame page); an admin can still run `ENDROUND` |
 
 When a round ends, the bot announces it in every channel and waits 60 seconds. Then the top three are saved to the Hall of Fame: highest level first, ties broken by the least time left to the next level, the same order as the leaderboard and `TOP`. After that every character is reset (level, TTL, items, penalties, alignment and position) and a new round begins. Accounts, passwords and login sessions are kept, so nobody has to log in again. A scheduled (`cron`) round end always happens on time, and any quest in progress is cancelled by the reset.
+
+A quester who leaves on purpose (quit, part, kick, logout, nick change, talking) still brings the wrath of the gods on everyone. A quester who is gone through no fault of their own is just taken off the quest instead: when the bot rejoins and a quester isn't in the channel, the channels are told and that player has 10 minutes to come back (rejoin, or `LOGIN`) before leaving the quest; an admin `DEL` takes them off at once. Nobody is penalized, and the quest carries on with whoever is left. It is only cancelled, and the next one delayed by 12 hours, when fewer than `quest_min_questers` (default 1) remain.
 
 A bot that is down when a scheduled round end passes does not make it up when it comes back. An admin can run `ENDROUND` to reset on demand.
 
