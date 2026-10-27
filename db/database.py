@@ -249,6 +249,10 @@ class Database:
         await self.conn.execute("UPDATE players SET current_nick=? WHERE id=?", (nick,pid))
         await self.conn.commit()
 
+    async def update_userhost(self, pid, userhost):
+        await self.conn.execute("UPDATE players SET userhost=? WHERE id=?", (userhost,pid))
+        await self.conn.commit()
+
     async def update_position(self, pid, x, y):
         await self.conn.execute("UPDATE players SET pos_x=?,pos_y=? WHERE id=?", (x,y,pid))
 

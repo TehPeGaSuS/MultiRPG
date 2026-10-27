@@ -60,6 +60,11 @@ class IRCBot:
         self._connected = True
         if self.server_pass: await self._raw(f"PASS {self.server_pass}")
         self.current_nick = self.nick   # fresh connection: start from the configured nick
+        self._cap_ls = []
+        # Ask for chghost so a services vhost change arrives as CHGHOST instead of
+        # a fake PART/JOIN (which would cost the player a part penalty and a quest).
+        # Servers without CAP just ignore it and register normally.
+        await self._raw("CAP LS 302")
         await self._raw(f"NICK {self.nick}")
         await self._raw(f"USER multirpg 0 * :Multi IdleRPG Bot")
 
@@ -149,6 +154,22 @@ class IRCBot:
 
         if len(parts) > 1:
             cmd2 = parts[1]
+
+            # CAP — :server CAP <nick> LS [*] :caps  /  ACK|NAK :caps
+            if cmd2 == "CAP" and len(parts) > 3:
+                sub = parts[3].upper()
+                if sub == "LS":
+                    more = len(parts) > 5 and parts[4] == "*"
+                    caps = " ".join(parts[5 if more else 4:]).lstrip(":").split()
+                    self._cap_ls += [c.split("=")[0] for c in caps]
+                    if not more:
+                        if "chghost" in self._cap_ls:
+                            await self._raw("CAP REQ :chghost")
+                        else:
+                            await self._raw("CAP END")
+                elif sub in ("ACK", "NAK"):
+                    await self._raw("CAP END")
+                return
 
             # 001 — welcome / registered
             if cmd2 == "001":
@@ -318,6 +339,17 @@ class IRCBot:
 
         # Ignore our own messages for all other commands
         if usernick == self.current_nick:
+            return
+
+        # ── CHGHOST ───────────────────────────────────────────────────────────
+        # :nick!olduser@oldhost CHGHOST newuser newhost — not a part, just track it
+        if command == "CHGHOST":
+            if len(parts) > 3:
+                p = await self.engine.db.get_player_by_nick(usernick, self.network_name)
+                if p and p["is_online"]:
+                    uh = f"{usernick}!{parts[2]}@{parts[3].lstrip(':')}"
+                    await self.engine.db.update_userhost(p["id"], uh)
+                    log.info(f"[{self.network_name}] CHGHOST {p['username']}: {uh}")
             return
 
         # ── PRIVMSG ───────────────────────────────────────────────────────────
