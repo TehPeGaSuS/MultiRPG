@@ -92,7 +92,7 @@ use_ssl    = true
 sasl_username = "MultiRPG"
 sasl_password = "yourpass"
 nick_recover  = ["PRIVMSG NickServ :REGAIN $nick"]
-# connect_commands  = ["MODE $nick +B"]
+connect_commands = []           # raw lines after connecting, e.g. ["MODE $nick +B"]
 # nick_regain_tries = 12          # 5-minute retries while off the nick; 0 = forever
 
 # DALnet: no SASL; GHOST + NICK, then the bot identifies once the nick is back
