@@ -730,6 +730,13 @@ and every character is reset. Players stay logged in. Works even while a quest i
 still in the channel.</p>
 <pre>/msg MultiRPG RELOGIN</pre>
 
+<h3>IDENTIFY [network] — Identify / Recover the Bot's Nick</h3>
+<p>Identifies the bot to services on a network (default: the one you're messaging from). If the
+bot isn't on its configured nick there, it runs that network's <code>nick_recover</code> instead
+(or a plain <code>NICK</code>), identifies once the nick is back, and starts the
+<code>nick_regain_tries</code> count over.</p>
+<pre>/msg MultiRPG IDENTIFY DALnet</pre>
+
 <h3>FORCELOGIN &lt;character&gt; &lt;nick&gt; &lt;network&gt; [userhost]</h3>
 <p>Logs a character in as the given IRC nick without their password. If the userhost is
 left out, the bot looks it up with WHO.</p>

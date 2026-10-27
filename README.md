@@ -81,6 +81,7 @@ use_ssl    = true
 # nickserv_pass = "yourpass"
 # server_pass   = "yourpass"
 
+# Atheme (Libera): SASL logs the bot in before it joins
 [[networks]]
 name       = "Libera"
 host       = "irc.libera.chat"
@@ -88,6 +89,23 @@ port       = 6697
 channel    = "#multirpg"
 nick       = "MultiRPG"
 use_ssl    = true
+sasl_username = "MultiRPG"
+sasl_password = "yourpass"
+nick_recover  = ["PRIVMSG NickServ :REGAIN $nick"]
+# connect_commands  = ["MODE $nick +B"]
+# nick_regain_tries = 12          # 5-minute retries while off the nick; 0 = forever
+
+# DALnet: no SASL; GHOST + NICK, then the bot identifies once the nick is back
+[[networks]]
+name       = "DALnet"
+host       = "irc.dal.net"
+port       = 6697
+channel    = "#multirpg"
+nick       = "MultiRPG"
+use_ssl    = true
+nickserv_pass   = "yourpass"
+nickserv_target = "NickServ@services.dal.net"
+nick_recover    = ["PRIVMSG NickServ@services.dal.net :GHOST $nick yourpass", "NICK $nick"]
 ```
 
 Add as many `[[networks]]` blocks as you like. All networks share the same game world and player database.
@@ -101,6 +119,7 @@ Optional per-network login and nick settings:
 | `sasl_username`, `sasl_password` | Log in with SASL PLAIN before registering, so the bot is identified before it joins. The password falls back to `nickserv_pass`. If the server has no SASL, or SASL fails, the bot uses `IDENTIFY` instead. |
 | `connect_commands` | Raw lines sent after connecting, before joining (`$nick` = the configured nick), e.g. `["OPER MultiRPG operpass"]`. |
 | `nick_recover` | Raw lines sent only when the configured nick was taken (`$nick` = that nick). The bot also takes the nick back whenever its holder quits or changes nick. |
+| `nick_regain_tries` | While the bot isn't on its nick, it retries every 5 minutes (`nick_recover`, or a plain `NICK`) this many times; default 12 (an hour), `0` = forever. The admin `IDENTIFY` command starts the count over. |
 
 ```toml
 # Atheme
@@ -238,7 +257,7 @@ All commands are sent via **private message** to the bot. Talking in the channel
 
 See [ADMIN.md](ADMIN.md) for the full reference. Quick list:
 
-`HOG` `FORCEQUEST` `ENDROUND` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>` `RELOGIN` `FORCELOGIN <character> <nick> <network> [userhost]`
+`HOG` `FORCEQUEST` `ENDROUND` `PAUSE` `SILENT <0-3>` `CLEARQ` `PUSH <user> <secs>` `CHPASS <user> <pass>` `CHCLASS <user> <class>` `CHUSER <user> <newname>` `DEL <user>` `DELOLD <days>` `MKADMIN <user>` `DELADMIN <user>` `RELOGIN` `FORCELOGIN <character> <nick> <network> [userhost]` `IDENTIFY [network]`
 
 To make yourself admin, first register a character, then run directly against the database:
 ```bash

@@ -117,6 +117,14 @@ Re-run the channel WHO on every network and log back in anyone who was online an
 /msg MultiRPG RELOGIN
 ```
 
+### `IDENTIFY [network]`
+Identify the bot to services on a network (default: the one you're messaging from). If the bot isn't on its configured nick there, it runs that network's `nick_recover` instead (or a plain `NICK`), identifies once the nick is back, and starts the `nick_regain_tries` count over.
+
+```
+/msg MultiRPG IDENTIFY
+/msg MultiRPG IDENTIFY DALnet
+```
+
 ### `FORCELOGIN <character> <nick> <network> [userhost]`
 Log a character in as the given IRC nick, without their password. If you leave out the userhost, the bot looks it up with WHO.
 

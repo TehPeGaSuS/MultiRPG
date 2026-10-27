@@ -11,7 +11,8 @@ class IRCBot:
     def __init__(self, network_name, host, port, channel, nick, engine,
                  nickserv_pass=None, server_pass=None, use_ssl=False, tls_verify=True,
                  reconnect_delay=30, modes="+i", sasl_username=None, sasl_password=None,
-                 nick_recover=None, connect_commands=None, nickserv_target="NickServ"):
+                 nick_recover=None, connect_commands=None, nickserv_target="NickServ",
+                 nick_regain_tries=12):
         self.network_name    = network_name
         self.host, self.port = host, port
         self.channel         = channel
@@ -26,6 +27,8 @@ class IRCBot:
         self.nickserv_target = nickserv_target or "NickServ"  # e.g. NickServ@services.dal.net
         self.nick_recover    = list(nick_recover or [])      # raw lines, $nick = configured nick
         self.connect_commands = list(connect_commands or [])  # raw lines sent after 001
+        self.nick_regain_tries = nick_regain_tries   # 5-minute retries while off our nick; 0 = forever
+        self._regain_tries   = 0
         self.server_pass     = server_pass
         self.use_ssl         = use_ssl
         self.tls_verify      = tls_verify
@@ -46,7 +49,8 @@ class IRCBot:
             self.engine.net_down(self.network_name)   # until we're back in the channel
             try:
                 await self._connect()
-                await asyncio.gather(self._recv_loop(), self._send_loop())
+                await asyncio.gather(self._recv_loop(), self._send_loop(),
+                                     self._regain_loop())
             except Exception as e:
                 log.error(f"[{self.network_name}] {e}", exc_info=True)
             self._connected = False
@@ -71,6 +75,7 @@ class IRCBot:
         self.current_nick = self.nick   # fresh connection: start from the configured nick
         self._registered  = False
         self._sasl_ok     = False
+        self._regain_tries = 0
         self._cap_ls = {}
         # Ask for chghost so a services vhost change arrives as CHGHOST instead of
         # a fake PART/JOIN (which would cost the player a part penalty and a quest).
@@ -237,8 +242,7 @@ class IRCBot:
                     await self._raw(f"MODE {self.current_nick} {self.modes}")
                 if taken and self.nick_recover:
                     log.info(f"[{self.network_name}] {self.nick} is taken; running nick_recover")
-                    for line in self.nick_recover:
-                        await self._raw(line.replace("$nick", self.nick))
+                    await self._recover_nick()
                 await self._raw(f"JOIN {self.channel}")
                 return
 
@@ -410,6 +414,7 @@ class IRCBot:
                 regained = (new_nick.lower() == self.nick.lower()
                             and self.current_nick.lower() != self.nick.lower())
                 self.current_nick = new_nick
+                if regained: self._regain_tries = 0
                 if regained and self.nickserv_pass and not self._sasl_ok:
                     # Back on our nick without SASL: identify for it now
                     await self._identify()
@@ -472,6 +477,46 @@ class IRCBot:
             if kicked:
                 await self._deliver_local(
                     await self.engine.on_kick(kicked, self.network_name))
+
+    async def _recover_nick(self):
+        """nick_recover if configured, else a plain NICK."""
+        for line in self.nick_recover or ["NICK $nick"]:
+            await self._raw(line.replace("$nick", self.nick))
+
+    async def _regain_loop(self):
+        """While we're off our configured nick, retry every 5 minutes, up to
+        nick_regain_tries times (0 = forever). IDENTIFY resets the count."""
+        while self._connected:
+            await asyncio.sleep(300)
+            if not (self._connected and self._registered): continue
+            if self.current_nick.lower() == self.nick.lower(): continue
+            limit = self.nick_regain_tries
+            if limit and self._regain_tries >= limit: continue
+            self._regain_tries += 1
+            log.info(f"[{self.network_name}] Trying to regain {self.nick} "
+                     f"({self._regain_tries}/{limit or '∞'})")
+            if limit and self._regain_tries == limit:
+                log.warning(f"[{self.network_name}] Last try for {self.nick}; "
+                            "an admin can run IDENTIFY to try again")
+            await self._recover_nick()
+
+    async def cmd_identify(self) -> str:
+        """Admin IDENTIFY: identify to services, or run nick_recover when we're
+        off our nick (identifying follows once it's back)."""
+        if not (self._connected and self._registered):
+            return f"Not connected to {self.network_name}."
+        if self.current_nick.lower() != self.nick.lower():
+            self._regain_tries = 0
+            await self._recover_nick()
+            how = "ran nick_recover" if self.nick_recover else f"sent NICK {self.nick}"
+            msg = f"{self.network_name}: {self.nick} is taken (I'm {self.current_nick}), {how}."
+            if self.nickserv_pass and not self._sasl_ok:
+                msg += " I'll identify once it's back."
+            return msg
+        if not self.nickserv_pass:
+            return f"{self.network_name}: no nickserv_pass or sasl_password set."
+        await self._identify()
+        return f"{self.network_name}: sent IDENTIFY to {self.nickserv_target}."
 
     async def _identify(self):
         await self._raw(f"PRIVMSG {self.nickserv_target} :IDENTIFY {self.nickserv_pass}")
@@ -592,7 +637,7 @@ class IRCBot:
                 "  ALIGN <good|neutral|evil>                — Change alignment",
                 "  REMOVEME                                 — Delete account",
                 "Talking in channel, parting, quitting, nick changes = penalty!",
-                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DEL DELOLD MKADMIN DELADMIN",
+                "Admin commands: HOG FORCEQUEST RELOGIN FORCELOGIN IDENTIFY ENDROUND PUSH CHPASS CHCLASS CHUSER PAUSE SILENT CLEARQ DEL DELOLD MKADMIN DELADMIN",
                 f"Running MultiRPG v{__version__} :: Source: {REPO_URL}",
             ]: await reply(line)
 
@@ -677,6 +722,13 @@ class IRCBot:
                 await self._deliver_local(broadcasts)
             else:
                 await reply("A round reset is already in progress.")
+
+        elif cmd == "IDENTIFY":
+            if not await self._is_admin(nick): await reply("Access denied."); return
+            net = args[0] if args else self.network_name
+            bot = self.find_bot(net)
+            if not bot: await reply(f"No such network {net}."); return
+            await reply(await bot.cmd_identify())
 
         elif cmd == "FORCELOGIN":
             if not await self._is_admin(nick): await reply("Access denied."); return

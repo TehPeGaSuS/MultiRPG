@@ -47,6 +47,8 @@ use_ssl = true
 # nick_recover = ["PRIVMSG NickServ :REGAIN $nick"]
 # nick_recover = ["PRIVMSG NickServ :RECOVER $nick yourpassword"]
 # nick_recover = ["PRIVMSG NickServ@services.dal.net :GHOST $nick yourpassword", "NICK $nick"]
+# While off its nick, retry every 5 minutes this many times (0 = forever)
+# nick_regain_tries = 12
 # Who IDENTIFY goes to (default NickServ); on DALnet use the full address
 # nickserv_target = "NickServ@services.dal.net"
 
@@ -157,6 +159,7 @@ async def main():
             engine        = engine,
             nickserv_pass = net.get("nickserv_pass"),
             nickserv_target = net.get("nickserv_target", "NickServ"),
+            nick_regain_tries = int(net.get("nick_regain_tries", 12)),
             sasl_username = net.get("sasl_username"),
             sasl_password = net.get("sasl_password"),
             nick_recover  = net.get("nick_recover", []),
