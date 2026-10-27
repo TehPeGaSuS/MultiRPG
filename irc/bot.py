@@ -19,11 +19,11 @@ class IRCBot:
         self.nick            = nick
         self.current_nick    = nick
         self.engine          = engine
-        # One password serves both: SASL falls back to nickserv_pass and the
-        # IDENTIFY fallback to sasl_password, so old configs keep working.
+        # SASL may reuse nickserv_pass (it goes to the server), but IDENTIFY never
+        # borrows sasl_password: a SASL-only config must not PRIVMSG its password.
         self.sasl_username   = sasl_username
         self.sasl_password   = sasl_password or nickserv_pass
-        self.nickserv_pass   = nickserv_pass or sasl_password
+        self.nickserv_pass   = nickserv_pass
         self.nickserv_target = nickserv_target or "NickServ"  # e.g. NickServ@services.dal.net
         self.nick_recover    = list(nick_recover or [])      # raw lines, $nick = configured nick
         self.connect_commands = list(connect_commands or [])  # raw lines sent after 001
@@ -43,6 +43,10 @@ class IRCBot:
         self._prev_online: dict = {}     # userhost -> username for auto-login
         self._auto_logged_in: list = []  # nicks matched during WHO (for 315 summary)
         self._pending_forcelogin = None  # (char, nick, channel, network) waiting for WHO
+        self._registered     = False     # per-connection state, reset in _connect
+        self._sasl_ok        = False
+        self._sasl_rejected  = False
+        self._regain_tries   = 0
 
     async def run(self):
         while True:
@@ -75,6 +79,7 @@ class IRCBot:
         self.current_nick = self.nick   # fresh connection: start from the configured nick
         self._registered  = False
         self._sasl_ok     = False
+        self._sasl_rejected = False   # server refused our SASL password (904)
         self._regain_tries = 0
         self._cap_ls = {}
         # Ask for chghost so a services vhost change arrives as CHGHOST instead of
@@ -196,10 +201,10 @@ class IRCBot:
                             mechs = self._cap_ls.get("sasl")
                             if mechs is None:
                                 log.warning(f"[{self.network_name}] Server has no SASL; "
-                                            "falling back to NickServ IDENTIFY")
+                                            f"{self._fallback()}")
                             elif mechs and "PLAIN" not in mechs.upper().split(","):
                                 log.warning(f"[{self.network_name}] Server SASL lacks PLAIN "
-                                            f"({mechs}); falling back to NickServ IDENTIFY")
+                                            f"({mechs}); {self._fallback()}")
                             else:
                                 want.append("sasl")
                         await self._raw(f"CAP REQ :{' '.join(want)}" if want else "CAP END")
@@ -220,8 +225,10 @@ class IRCBot:
                 await self._raw("CAP END")
                 return
             if cmd2 in ("902", "904", "905", "906", "907"):
-                log.warning(f"[{self.network_name}] SASL failed ({cmd2}: "
-                            f"{' '.join(parts[3:]).lstrip(':')}); falling back to NickServ IDENTIFY")
+                # 904 = wrong credentials: IDENTIFY with that same password is pointless
+                self._sasl_rejected = cmd2 == "904"
+                log.error(f"[{self.network_name}] SASL failed ({cmd2}: "
+                          f"{' '.join(parts[3:]).lstrip(':')}); {self._fallback()}")
                 await self._raw("CAP END")
                 return
 
@@ -233,7 +240,7 @@ class IRCBot:
                 taken = self.current_nick.lower() != self.nick.lower()
                 # With the nick taken and nick_recover set, identify once it's back
                 # (see the own-NICK handler): IDENTIFY on the fallback nick is useless.
-                if self.nickserv_pass and not self._sasl_ok and not (taken and self.nick_recover):
+                if self._can_identify() and not (taken and self.nick_recover):
                     await self._identify()
                     await asyncio.sleep(2)
                 for line in self.connect_commands:
@@ -415,7 +422,7 @@ class IRCBot:
                             and self.current_nick.lower() != self.nick.lower())
                 self.current_nick = new_nick
                 if regained: self._regain_tries = 0
-                if regained and self.nickserv_pass and not self._sasl_ok:
+                if regained and self._can_identify():
                     # Back on our nick without SASL: identify for it now
                     await self._identify()
             return
@@ -510,13 +517,23 @@ class IRCBot:
             await self._recover_nick()
             how = "ran nick_recover" if self.nick_recover else f"sent NICK {self.nick}"
             msg = f"{self.network_name}: {self.nick} is taken (I'm {self.current_nick}), {how}."
-            if self.nickserv_pass and not self._sasl_ok:
+            if self._can_identify():
                 msg += " I'll identify once it's back."
             return msg
         if not self.nickserv_pass:
-            return f"{self.network_name}: no nickserv_pass or sasl_password set."
+            return f"{self.network_name}: no nickserv_pass set."
         await self._identify()
         return f"{self.network_name}: sent IDENTIFY to {self.nickserv_target}."
+
+    def _can_identify(self) -> bool:
+        """IDENTIFY only with an explicit nickserv_pass, not after SASL logged us
+        in, and not with the very password SASL just had refused."""
+        if not self.nickserv_pass or self._sasl_ok: return False
+        return not (self._sasl_rejected and self.nickserv_pass == self.sasl_password)
+
+    def _fallback(self) -> str:
+        return ("falling back to NickServ IDENTIFY" if self._can_identify()
+                else "carrying on unidentified")
 
     async def _identify(self):
         await self._raw(f"PRIVMSG {self.nickserv_target} :IDENTIFY {self.nickserv_pass}")

@@ -116,7 +116,7 @@ Optional per-network login and nick settings:
 |---|---|
 | `nickserv_pass` | Sent as `PRIVMSG NickServ :IDENTIFY <pass>` after connecting. When the nick was taken and `nick_recover` is set, it's sent once the nick is back instead. |
 | `nickserv_target` | Who `IDENTIFY` goes to (default `NickServ`). On DALnet use `NickServ@services.dal.net`. |
-| `sasl_username`, `sasl_password` | Log in with SASL PLAIN before registering, so the bot is identified before it joins. The password falls back to `nickserv_pass`. If the server has no SASL, or SASL fails, the bot uses `IDENTIFY` instead. |
+| `sasl_username`, `sasl_password` | Log in with SASL PLAIN before registering, so the bot is identified before it joins. The password falls back to `nickserv_pass`. If `nickserv_pass` is set and the server has no SASL (or no PLAIN), or SASL fails, the bot uses `IDENTIFY` instead; it doesn't retry a password SASL just rejected. With SASL settings only, the password is never sent to NickServ. |
 | `connect_commands` | Raw lines sent after connecting, before joining (`$nick` = the configured nick), e.g. `["OPER MultiRPG operpass"]`. |
 | `nick_recover` | Raw lines sent only when the configured nick was taken (`$nick` = that nick). The bot also takes the nick back whenever its holder quits or changes nick. |
 | `nick_regain_tries` | While the bot isn't on its nick, it retries every 5 minutes (`nick_recover`, or a plain `NICK`) this many times; default 12 (an hour), `0` = forever. The admin `IDENTIFY` command starts the count over. |

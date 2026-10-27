@@ -38,7 +38,8 @@ use_ssl = true
 # tls_verify = false
 # nickserv_pass = "yourpassword"
 # server_pass   = ""
-# SASL PLAIN (password falls back to nickserv_pass; IDENTIFY is used if SASL fails)
+# SASL PLAIN (password falls back to nickserv_pass). IDENTIFY is only used as a
+# fallback when nickserv_pass is set; a SASL-only config never PRIVMSGs its password.
 # sasl_username = "MultiRPG"
 # sasl_password = "yourpassword"
 # Raw lines sent after connecting, before joining ($nick = the configured nick)
