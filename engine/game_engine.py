@@ -12,6 +12,7 @@ MAP_X, MAP_Y         = 500, 500
 RP_BASE, RP_STEP     = 600, 1.16   # IdleRPG 3.0 defaults: TTL = 600 * 1.16^level
 RP_PEN_STEP          = 1.14   # used only for penalty calculation
 QUEST_GRACE          = 600    # secs an absent quester gets to come back before leaving the quest
+NET_FREEZE           = 600    # secs a network's bot may be away before its players freeze
 
 
 def _sentence(text: str) -> str:
@@ -231,6 +232,8 @@ class GameEngine:
         self.round_cron = round_cron  # used when hof_type="cron"
         self.quest_min_questers = max(1, quest_min_questers)  # fewer left → quest cancelled
         self._quest_absent: dict = {}  # quester id -> deadline to come back by
+        self._net_down: dict = {}      # network -> when its bot lost the channel
+        self._frozen: set = set()      # networks announced as frozen
         self._last_cron_check = 0     # last timestamp cron was evaluated
         self._lasttime  = 0          # 0 = not joined yet
         self._rpreport  = self_clock  # start at sc so tick 1 doesn't trigger modulo-zero events
@@ -469,7 +472,7 @@ class GameEngine:
         """Admin: force-start a quest immediately, ignoring timer and eligibility."""
         if self._quest["questers"]:
             return [broadcast_all("A quest is already in progress.")]
-        online = await self.db.get_online_players()
+        online = await self._online_players()
         if len(online) < 4:
             return [broadcast_all(
                 f"Not enough online players to start a quest "
@@ -554,7 +557,7 @@ class GameEngine:
         return "Done.", [broadcast_all(msg)]
 
     async def cmd_hog(self, admin_nick, network) -> list:
-        return await self._hand_of_god(await self.db.get_online_players())
+        return await self._hand_of_god(await self._online_players())
 
     async def cmd_delold(self, days: float) -> str:
         n = await self.db.delete_old_accounts(days)
@@ -653,6 +656,49 @@ class GameEngine:
         verb  = "has" if len(late) == 1 else "have"
         return await self._drop_questers(late, f"{names} didn't come back in time and {verb} left the quest.")
 
+    # ── Networks whose bot is away ────────────────────────────────────────────
+
+    def net_down(self, network):
+        """The bot lost (or hasn't yet joined) this network's channel."""
+        self._net_down.setdefault(network, int(time.time()))
+
+    def net_up(self, network):
+        self._net_down.pop(network, None)
+
+    def frozen_networks(self) -> set:
+        """Networks whose bot has been away for NET_FREEZE seconds. Their players
+        can't be seen, so they neither idle nor get penalized: they're frozen,
+        still logged in, until the bot is back and the WHO picks them up."""
+        now = int(time.time())
+        return {n for n, t in self._net_down.items() if now - t >= NET_FREEZE}
+
+    async def _online_players(self) -> list:
+        frozen = self.frozen_networks()
+        return [p for p in await self.db.get_online_players() if p["network"] not in frozen]
+
+    def _announce_frozen(self) -> list:
+        frozen, msgs = self.frozen_networks(), []
+        for n in sorted(frozen - self._frozen):
+            msgs.append(broadcast_all(
+                f"{n} has been unreachable for {NET_FREEZE // 60} minutes. "
+                f"Its players are frozen until it is back."))
+        for n in sorted(self._frozen - frozen):
+            msgs.append(broadcast_all(f"{n} is back. Its players are no longer frozen."))
+        self._frozen = frozen
+        return msgs
+
+    async def _check_quest_frozen(self) -> list:
+        """Questers on a frozen network can't take part: drop them, no penalties."""
+        frozen = self.frozen_networks()
+        gone   = [x for x in self._quest["questers"] if x["network"] in frozen]
+        if not gone: return []
+        names = ", ".join(f"{x['username']}@{x['network']}" for x in gone)
+        nets  = ", ".join(sorted({x["network"] for x in gone}))
+        verb  = "has" if len(gone) == 1 else "have"
+        return await self._drop_questers(
+            {x["id"] for x in gone},
+            f"{nets} is unreachable, so {names} {verb} left the quest.")
+
     # ── Quest penalty check ───────────────────────────────────────────────────
 
     async def _qpc(self, player) -> list:
@@ -661,7 +707,7 @@ class GameEngine:
         if not any(x["id"] == player["id"] for x in q["questers"]): return []
         q["questers"] = []
         q["qtime"]    = int(time.time()) + 43200
-        for p in await self.db.get_online_players():
+        for p in await self._online_players():
             await self.db.add_penalty(p["id"], int(15 * (RP_PEN_STEP ** p["level"])), "pen_quest")
         await self.db.clear_quest()
         await self.db.commit()
@@ -679,6 +725,11 @@ class GameEngine:
             return []   # bot hasn't joined channel yet
         if self.paused:
             return []   # PAUSE mode active
+        if self.bot_networks and self.frozen_networks() >= set(self.bot_networks):
+            # Every network is away (most likely the bot's own host): the whole
+            # game waits, like it does while the bot isn't running at all.
+            self._lasttime = int(time.time())
+            return []
 
         # ── End-of-round reset ────────────────────────────────────────────────
         if self._reset_pending and int(time.time()) >= self._reset_at:
@@ -714,10 +765,10 @@ class GameEngine:
                 )]
             self._last_cron_check = last_fire
 
-        msgs    = []
-        online  = await self.db.get_online_players()
+        msgs    = self._announce_frozen()
+        online  = await self._online_players()
         if not online:
-            return []
+            return msgs
 
         n       = len(online)
         n_evil  = sum(1 for p in online if p["alignment"] == "e")
@@ -778,6 +829,7 @@ class GameEngine:
         # ── Quest ─────────────────────────────────────────────────────────────
         try:
             msgs.extend(await self._check_quest_absent())
+            msgs.extend(await self._check_quest_frozen())
             msgs.extend(await self._check_quest(online))
         except Exception as e:
             log.error(f"Quest error: {e}", exc_info=True)
@@ -826,7 +878,7 @@ class GameEngine:
         msgs.extend(await self._find_item(p, new_level))
 
         # Battle on level-up
-        online    = await self.db.get_online_players()
+        online    = await self._online_players()
         opponents = [x for x in online if x["id"] != p["id"]]
         if opponents and (new_level >= 25 or random.random() < 0.25):
             fresh = await self.db.get_player_by_id(p["id"])
@@ -914,7 +966,7 @@ class GameEngine:
 
         # Grid quest completion check
         if q["questers"] and q["type"] == 2:
-            fresh  = {p["id"]: p for p in await self.db.get_online_players()}
+            fresh  = {p["id"]: p for p in await self._online_players()}
             target = q["p1"] if q["stage"] == 1 else q["p2"]
             if all(
                 fresh.get(x["id"], {}).get("pos_x") == target[0] and

@@ -148,6 +148,8 @@ When a round ends, the bot announces it in every channel and waits 60 seconds. T
 
 A quester who leaves on purpose (quit, part, kick, logout, nick change, talking) still brings the wrath of the gods on everyone. A quester who is gone through no fault of their own is just taken off the quest instead: when the bot rejoins and a quester isn't in the channel, the channels are told and that player has 10 minutes to come back (rejoin, or `LOGIN`) before leaving the quest; an admin `DEL` takes them off at once. Nobody is penalized, and the quest carries on with whoever is left. It is only cancelled, and the next one delayed by 12 hours, when fewer than `quest_min_questers` (default 1) remain.
 
+If a network's bot has been away (disconnected, or not back in its channel) for 10 minutes, that network's players are **frozen**: they stay logged in, but don't idle, move, battle or get penalized until the bot is back and they're picked up by the WHO. Questers among them leave the quest, again with no penalties. The channels are told when a network freezes and when it is back. If every network is away at once, the problem is almost certainly the bot's own host, so the whole game simply waits, just as it does while the bot isn't running. On the website, players are 🟢 online, 🟡 frozen or 🔴 offline.
+
 A bot that is down when a scheduled round end passes does not make it up when it comes back. An admin can run `ENDROUND` to reset on demand.
 
 ---

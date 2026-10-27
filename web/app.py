@@ -122,6 +122,19 @@ footer a{color:var(--muted);text-decoration:underline}
 footer a:hover{color:var(--gold)}
 """
 
+# Traffic light: online green, frozen yellow, offline red
+LEGEND = "[online users are green, frozen users are yellow, offline users are red]"
+STATE_EMOJI = {"online": "🟢", "frozen": "🟡", "offline": "🔴"}
+
+def player_state(p, frozen) -> str:
+    """online / offline / frozen (logged in, but their network's bot is away)."""
+    if not p["is_online"]: return "offline"
+    return "frozen" if p["network"] in frozen else "online"
+
+def _frozen(req) -> set:
+    engine = req.app.get("engine")
+    return engine.frozen_networks() if engine else set()
+
 def page(title, body, extra_css="", extra_head="", show_hof=True):
     return f"""<!DOCTYPE html><html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Multi IdleRPG — {title}</title>
@@ -138,6 +151,7 @@ def page(title, body, extra_css="", extra_head="", show_hof=True):
 async def handle_api_players(req):
     db = req.app["db"]
     players = await db.get_all_players()
+    frozen  = _frozen(req)
     data = []
     for p in players:
         isum = await db.get_item_sum(p["id"])
@@ -150,6 +164,7 @@ async def handle_api_players(req):
             "x":         p["pos_x"],
             "y":         p["pos_y"],
             "is_online": bool(p["is_online"]),
+            "state":     player_state(p, frozen),
             "ttl":       p["ttl"],
             "item_sum":  isum,
         })
@@ -168,11 +183,12 @@ async def handle_index(req):
     db = req.app["db"]
     current_round = await db.get_round()
     players = await db.get_all_players()
+    frozen  = _frozen(req)
     rows = ""
     for p in players:
         isum   = await db.get_item_sum(p["id"])
         amap   = {"g": "good", "e": "evil", "n": "neutral"}
-        status = "🔵" if p["is_online"] else "🔴"
+        status = STATE_EMOJI[player_state(p, frozen)]
         s      = abs(int(p["ttl"]))
         d, s   = divmod(s, 86400); h, s = divmod(s, 3600); m, s = divmod(s, 60)
         ttl_s  = f"{d}d {h:02d}:{m:02d}:{s:02d}"
@@ -197,7 +213,9 @@ td a:visited{color:var(--muted)}
 tr:last-child td{border-bottom:none}
 .lb-legend{color:var(--muted);font-size:0.82rem;margin:0 0 0.6rem}
 """
-    body = """<div class="container"><p class="lb-legend">[offline users are red, online users are blue]</p>
+    body = f"""<div class="container"><p class="lb-legend">{LEGEND}</p>
+"""
+    body += """
 <div class="table-wrap"><table id="lb">
   <thead><tr>
     <th>Player</th><th>Network</th><th>Level</th><th>Class</th>
@@ -207,6 +225,7 @@ tr:last-child td{border-bottom:none}
 </table></div></div>
 <script>
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const STATE = {online: '🟢', frozen: '🟡', offline: '🔴'};
 const AMAP = {g:'good', e:'evil', n:'neutral'};
 function fmtTTL(s) {
   s = Math.abs(Math.round(s));
@@ -221,7 +240,7 @@ async function refreshLeaderboard() {
     const tbody = document.getElementById('lb-body');
     tbody.innerHTML = players.map(p => `
       <tr>
-        <td>${p.is_online ? '🔵' : '🔴'} <a href="/player/${encodeURIComponent(p.username)}">${esc(p.username)}</a></td>
+        <td>${STATE[p.state]} <a href="/player/${encodeURIComponent(p.username)}">${esc(p.username)}</a></td>
         <td>${esc(p.network)}</td>
         <td>${p.level}</td>
         <td>${esc(p.char_class)}</td>
@@ -281,7 +300,7 @@ canvas{border:1px solid var(--border);border-radius:4px;display:block;
     </div>
     <div>
       <h3>Legend</h3>
-      <div id="legend">[offline users are red, online users are blue]</div>
+      <div id="legend">{LEGEND}</div>
     </div>
     <div id="status-bar">Round {current_round} — Loading…</div>
   </div>
@@ -327,11 +346,18 @@ mapImg.onload = () => {{
 let drawReady = false;
 
 // ── Render ────────────────────────────────────────────────────────────────────
-function drawDot(ctx, x, y, online) {{
-  const color  = online ? [40, 110, 255] : [220, 40, 40];
-  const [r,g,b] = color;
-  const outerR = online ? 12 : 10;
-  const innerR = online ? 4.5 : 3.5;
+// Traffic light, like the 🟢 🟡 🔴 on the leaderboard
+const STATE = {{online: '🟢', frozen: '🟡', offline: '🔴'}};
+const DOT = {{
+  online:  {{rgb: [40, 190, 80],  stroke: '#22b14c', outer: 12, inner: 4.5}},
+  offline: {{rgb: [220, 40, 40],  stroke: '#ff2020', outer: 10, inner: 3.5}},
+  frozen:  {{rgb: [240, 190, 30], stroke: '#f0b400', outer: 11, inner: 4}},
+}};
+function drawDot(ctx, x, y, state) {{
+  const d = DOT[state] || DOT.offline;
+  const [r,g,b] = d.rgb;
+  const outerR = d.outer;
+  const innerR = d.inner;
   // Outer glow
   const g2 = ctx.createRadialGradient(x, y, 0, x, y, outerR);
   g2.addColorStop(0, `rgba(${{r}},${{g}},${{b}},0.75)`);
@@ -341,26 +367,26 @@ function drawDot(ctx, x, y, online) {{
   // Inner dot
   ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI*2);
   ctx.fillStyle = `rgba(${{r}},${{g}},${{b}},0.95)`; ctx.fill();
-  ctx.strokeStyle = online ? '#2a6eff' : '#ff2020';
+  ctx.strokeStyle = d.stroke;
   ctx.lineWidth = 1; ctx.stroke();
 }}
 
 function draw() {{
   if (!drawReady) return;
   ctx.drawImage(off, 0, 0);
-  // Offline first (behind online)
-  for (const p of players.filter(p => !p.is_online)) drawDot(ctx, clampXY(p.x), clampXY(p.y), false);
-  // Online on top
-  for (const p of players.filter(p =>  p.is_online)) drawDot(ctx, clampXY(p.x), clampXY(p.y), true);
+  // Offline at the back, then frozen, online on top
+  for (const st of ['offline', 'frozen', 'online'])
+    for (const p of players.filter(p => p.state === st)) drawDot(ctx, clampXY(p.x), clampXY(p.y), st);
 }}
 
 // ── Data refresh ──────────────────────────────────────────────────────────────
 async function fetchPlayers() {{
   try {{
     players = await (await fetch('/api/players')).json();
-    const n = players.filter(p => p.is_online).length;
+    const n = players.filter(p => p.state === 'online').length;
+    const f = players.filter(p => p.state === 'frozen').length;
     document.getElementById('status-bar').textContent =
-      `${{n}} online · ${{players.length}} total`;
+      `${{n}} online · ${{f ? f + ' frozen · ' : ''}}${{players.length}} total`;
     draw();
   }} catch(e) {{ document.getElementById('status-bar').textContent = 'Connection error'; }}
 }}
@@ -393,7 +419,7 @@ canvas.addEventListener('mousemove', e => {{
     hoverEl.innerHTML =
       `<b>${{esc(hit.username)}}</b> @${{esc(hit.network)}}<br>` +
       `Lv.${{hit.level}} ${{esc(hit.char_class)}}<br>` +
-      `[${{hit.x}}, ${{hit.y}}] · ${{hit.is_online ? '🔵' : '🔴'}}<br>` +
+      `[${{hit.x}}, ${{hit.y}}] · ${{STATE[hit.state]}} ${{hit.state}}<br>` +
       locLine;
     tooltip.style.cssText = `display:block;left:${{e.clientX+14}}px;top:${{e.clientY-10}}px`;
     tooltip.textContent = `${{hit.username}} lv.${{hit.level}}`;
@@ -603,6 +629,9 @@ all online users suffer a p15 punishment.</p>
 <p>A quester who is gone through no fault of their own is taken off the quest instead, with no
 penalties: if a quester isn't in the channel when the bot rejoins, they have 10 minutes to
 come back (rejoin, or <code>LOGIN</code>). The quest carries on with whoever is left.</p>
+<p>If a network's bot is away for 10 minutes, that network's players are <em>frozen</em> 🟡: still
+logged in, but they don't idle, move, battle or get penalized until the bot is back, and questers
+among them leave the quest without penalties. If every network is away, the whole game waits.</p>
 
 <a name="grid"></a>
 <h2>Grid System</h2>
@@ -1060,7 +1089,9 @@ async def handle_player(req):
         return fmt_ttl(s) if s else "None"
 
     amap      = {"g":"Good","e":"Evil","n":"Neutral"}
-    status    = "Online" if p["is_online"] else "Offline"
+    state     = player_state(p, _frozen(req))
+    status    = {"online": "Online", "offline": "Offline",
+                 "frozen": "Frozen (network unreachable)"}[state]
     alignment = amap.get(p["alignment"],"Neutral")
     total_pen = (p["pen_mesg"]+p["pen_nick"]+p["pen_part"]+
                  p["pen_kick"]+p["pen_quit"]+p["pen_quest"]+p["pen_logout"])
@@ -1099,7 +1130,7 @@ th{font-size:0.78rem;color:var(--muted);text-align:left;padding:0.38rem 1rem;
 td{font-size:0.86rem;color:var(--text);padding:0.38rem 1rem;
     border-bottom:1px solid var(--border);word-break:break-all}
 tr:last-child th,tr:last-child td{border-bottom:none}
-.online{color:#4f8bff}.offline{color:#cf6060}
+.online{color:#4fcf6f}.offline{color:#cf6060}.frozen{color:#e8b923}
 .ilvl{color:#d4b86a;font-family:monospace;margin-right:0.4rem;font-weight:600}
 .iname{color:var(--muted);font-style:italic;font-size:0.8rem}
 .muted{color:#3d4455;font-style:italic}
@@ -1113,9 +1144,10 @@ tr:last-child th,tr:last-child td{border-bottom:none}
     px, py = p["pos_x"], p["pos_y"]
     # JSON string literal for the map label; '<' escaped so it can't close the <script>
     lbl_js = json.dumps(p["username"]).replace("<", "\\u003c")
-    # same colours as the world map: online blue, offline red
-    dot_rgb, dot_hex, dot_fill = (("40,110,255", "#2a6eff", "#9cc0ff") if p["is_online"]
-                                  else ("220,40,40", "#ff2020", "#ff9999"))
+    # same colours as the world map: online green, frozen yellow, offline red
+    dot_rgb, dot_hex, dot_fill = {"online":  ("40,190,80", "#22b14c", "#9be7b0"),
+                                  "offline": ("220,40,40", "#ff2020", "#ff9999"),
+                                  "frozen":  ("240,190,30", "#f0b400", "#ffe08a")}[state]
 
     body = f"""<div class="pw">
   <div class="pname">{escape(p['username'])}</div>
@@ -1129,7 +1161,7 @@ tr:last-child th,tr:last-child td{border-bottom:none}
         {row('Class', escape(p['class']))}
         {row('Level', p['level'])}
         {row('Next Level', fmt_ttl(p['ttl']))}
-        {row('Status', '<span class="' + ('online' if p['is_online'] else 'offline') + '">' + status + '</span>')}
+        {row('Status', '<span class="' + state + '">' + status + '</span>')}
         {row('Host', '<span style="font-size:0.78rem;word-break:break-all">' + escape(p['userhost'] or '—') + '</span>')}
         {row('Account Created', fmt_ts(p['created_at']))}
         {row('Last Login', fmt_ts(p['last_login']))}
@@ -1199,7 +1231,7 @@ mapImg.onload = () => {{
 }};
 
 function drawDot() {{
-// Player dot — blue if online, red if offline
+// Player dot — green if online, yellow if frozen, red if offline
 const g2=ctx.createRadialGradient(PX,PY,0,PX,PY,12);
 g2.addColorStop(0,'rgba({dot_rgb},0.85)');
 g2.addColorStop(1,'rgba({dot_rgb},0)');

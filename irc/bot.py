@@ -35,6 +35,7 @@ class IRCBot:
 
     async def run(self):
         while True:
+            self.engine.net_down(self.network_name)   # until we're back in the channel
             try:
                 await self._connect()
                 await asyncio.gather(self._recv_loop(), self._send_loop())
@@ -316,6 +317,7 @@ class IRCBot:
                     await self.engine.db.mark_all_offline(self.network_name)
                 # mark_joined AFTER setting up prev_online, so tick starts
                 self.engine.mark_joined()
+                self.engine.net_up(self.network_name)
                 return
 
             # ── Auto-login by userhost when another user joins the channel ──
